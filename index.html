@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>제주 감성 해양지도</title>
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html, body {
@@ -30,9 +29,7 @@
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
         }
-        .filter-container::-webkit-scrollbar {
-            display: none;
-        }
+        .filter-container::-webkit-scrollbar { display: none; }
         .filter-bar-item {
             display: inline-flex;
             align-items: center;
@@ -74,9 +71,7 @@
             cursor: pointer;
             transition: transform 0.15s ease-in-out;
         }
-        .custom-marker:hover {
-            transform: scale(1.25) translateY(-3px);
-        }
+        .custom-marker:hover { transform: scale(1.25) translateY(-3px); }
         .parasol-marker {
             font-size: 24px;
             filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.25));
