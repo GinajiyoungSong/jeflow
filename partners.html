@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인증 파트너 디렉토리 | 해볼루션</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0B2438;
+    --navy-deep:#071726;
+    --basalt:#15191D;
+    --jade:#2FA8A0;
+    --jade-light:#7ED1C8;
+    --coral:#E2543F;
+    --coral-light:#F09080;
+    --sand:#F7F4EC;
+    --sand-dim:#D9CFB0;
+    --ink:#1C1F22;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--navy-deep);
+    color:var(--sand);
+    font-family:'Noto Sans KR', sans-serif;
+    line-height:1.6;
+  }
+  .mono{font-family:'JetBrains Mono', monospace;}
+  .display{font-family:'Black Han Sans', sans-serif; letter-spacing:0.5px;}
+
+  /* ===== NAV ===== */
+  .navbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 6vw;
+    border-bottom:1px solid rgba(247,244,236,0.12);
+    position:sticky; top:0; z-index:50;
+    background:rgba(7,23,38,0.92);
+    backdrop-filter:blur(6px);
+  }
+  .back-link{
+    display:flex; align-items:center; gap:8px;
+    color:var(--sand-dim); text-decoration:none;
+    font-size:14px; font-weight:500;
+    border:1px solid rgba(217,207,176,0.3);
+    padding:8px 14px; border-radius:999px;
+    transition:all .15s ease;
+  }
+  .back-link:hover{ border-color:var(--jade-light); color:var(--jade-light); }
+  .brand-mark{ display:flex; align-items:center; gap:10px; }
+  .brand-mark .logo-dot{
+    width:10px; height:10px; border-radius:50%; background:var(--coral);
+  }
+  .brand-mark span{ font-size:15px; letter-spacing:2px; color:var(--sand-dim); }
+  .page-index{ font-size:13px; color:var(--sand-dim); }
+  .page-index b{ color:var(--jade-light); }
+
+  /* ===== HERO ===== */
+  .hero{
+    position:relative;
+    padding:72px 6vw 56px;
+    overflow:hidden;
+    border-bottom:1px solid rgba(247,244,236,0.1);
+  }
+  .hero-stamp{
+    position:absolute; right:4vw; top:30px;
+    width:150px; height:150px;
+    opacity:0.9;
+  }
+  .hero h1{
+    font-family:'Black Han Sans', sans-serif;
+    font-size:clamp(34px, 5.2vw, 58px);
+    line-height:1.15;
+    max-width:760px;
+    color:var(--sand);
+  }
+  .hero h1 em{ font-style:normal; color:var(--jade-light); }
+  .hero p{
+    max-width:520px;
+    margin-top:18px;
+    color:var(--sand-dim);
+    font-size:16px;
+  }
+  .stat-strip{
+    display:flex; gap:0; margin-top:40px;
+    border-top:1px solid rgba(247,244,236,0.15);
+    max-width:640px;
+  }
+  .stat{
+    flex:1; padding:16px 20px 0; border-right:1px solid rgba(247,244,236,0.15);
+  }
+  .stat:last-child{ border-right:none; }
+  .stat .num{ font-family:'JetBrains Mono', monospace; font-size:26px; font-weight:700; color:var(--jade-light); }
+  .stat .label{ font-size:12px; color:var(--sand-dim); margin-top:4px; }
+
+  /* ===== FILTER BAR ===== */
+  .filter-bar{
+    padding:28px 6vw; display:flex; flex-wrap:wrap; gap:14px; align-items:center;
+    background:var(--navy); border-bottom:1px solid rgba(247,244,236,0.1);
+    position:sticky; top:73px; z-index:40;
+  }
+  #search{
+    flex:1; min-width:220px;
+    background:var(--navy-deep); border:1px solid rgba(247,244,236,0.25);
+    color:var(--sand); padding:11px 16px; border-radius:8px; font-size:14px;
+    font-family:inherit;
+  }
+  #search::placeholder{ color:rgba(217,207,176,0.5); }
+  #search:focus{ outline:none; border-color:var(--jade-light); }
+  .chip-group{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{
+    padding:9px 16px; border-radius:999px; border:1px solid rgba(247,244,236,0.25);
+    background:transparent; color:var(--sand-dim); font-size:13px; font-weight:500;
+    cursor:pointer; transition:all .15s ease; font-family:inherit;
+    white-space:nowrap;
+  }
+  .chip:hover{ border-color:var(--jade-light); }
+  .chip.active{ background:var(--jade); border-color:var(--jade); color:var(--navy-deep); font-weight:700; }
+  .badge-toggle-group{ display:flex; gap:6px; flex-wrap:wrap; }
+  .badge-toggle{
+    padding:7px 12px; border-radius:6px; border:1px dashed rgba(226,84,63,0.5);
+    background:transparent; color:var(--coral-light); font-size:12px; cursor:pointer;
+    font-family:inherit; transition:all .15s ease;
+  }
+  .badge-toggle.active{ background:rgba(226,84,63,0.18); border-style:solid; color:var(--coral-light); }
+
+  /* ===== GRID ===== */
+  .grid-wrap{ padding:44px 6vw 20px; }
+  #result-count{ font-size:13px; color:var(--sand-dim); margin-bottom:20px; }
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+    gap:22px;
+  }
+  .card{
+    position:relative;
+    background:var(--sand);
+    color:var(--ink);
+    border-radius:4px;
+    padding:22px 20px 20px;
+    box-shadow:0 14px 30px rgba(0,0,0,0.28);
+    display:flex; flex-direction:column;
+  }
+  .card::before{
+    content:"";
+    position:absolute; left:0; right:0; top:0; height:6px;
+    background:repeating-linear-gradient(90deg, transparent 0 8px, rgba(0,0,0,0.12) 8px 10px);
+  }
+  .card-stamps{
+    position:absolute; top:-10px; right:-6px;
+    display:flex;
+  }
+  .stamp{
+    width:56px; height:56px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    text-align:center; font-family:'JetBrains Mono', monospace;
+    font-size:8.5px; font-weight:700; line-height:1.15;
+    border:2px solid; margin-left:-16px;
+    background:var(--sand); text-transform:uppercase;
+  }
+  .stamp.biz{ border-color:var(--navy); color:var(--navy); transform:rotate(-9deg); }
+  .stamp.ins{ border-color:var(--jade); color:#0F6E56; transform:rotate(6deg); }
+  .stamp.edu{ border-color:var(--coral); color:#A32D2D; transform:rotate(-4deg); }
+  .stamp.aed{ border-color:#854F0B; color:#633806; transform:rotate(10deg); }
+  .stamp::after{
+    content:""; position:absolute; inset:4px; border:1px dashed currentColor; border-radius:50%; opacity:0.5;
+  }
+
+  .card-type{
+    display:inline-block; font-size:11px; font-weight:700; letter-spacing:0.5px;
+    color:#0F6E56; background:rgba(47,168,160,0.14); padding:3px 9px; border-radius:4px;
+    margin-bottom:10px; width:fit-content;
+  }
+  .card h3{ font-family:'Black Han Sans', sans-serif; font-size:22px; margin-bottom:4px; }
+  .card .region{ font-size:12.5px; color:#5F5E5A; margin-bottom:12px; }
+  .card .desc{ font-size:13.5px; color:#3A3A38; margin-bottom:14px; flex-grow:1; }
+  .card .meta-row{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .meta-tag{
+    font-size:11px; background:rgba(11,36,56,0.06); color:#1C1F22;
+    padding:4px 8px; border-radius:4px;
+  }
+  .card-footer{
+    border-top:1px dashed rgba(28,31,34,0.2); padding-top:12px;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12.5px; color:#5F5E5A;
+  }
+  .card-footer .mono{ color:#1C1F22; }
+  .card-footer a{ color:#0F6E56; text-decoration:none; font-weight:700; }
+  .card-footer a:hover{ text-decoration:underline; }
+
+  .empty-state{
+    text-align:center; padding:60px 20px; color:var(--sand-dim);
+  }
+
+  /* ===== FOOTER CTA ===== */
+  .cta{
+    margin:60px 6vw 80px; padding:44px 6vw;
+    background:var(--jade); color:var(--navy-deep);
+    border-radius:6px;
+    display:flex; justify-content:space-between; align-items:center; gap:24px;
+    flex-wrap:wrap;
+  }
+  .cta h2{ font-family:'Black Han Sans', sans-serif; font-size:26px; }
+  .cta p{ font-size:14px; margin-top:6px; max-width:460px; }
+  .cta-btn{
+    background:var(--navy-deep); color:var(--sand);
+    padding:14px 26px; border-radius:999px; text-decoration:none;
+    font-weight:700; font-size:14px; white-space:nowrap;
+  }
+  footer{
+    padding:24px 6vw 40px; font-size:12px; color:rgba(217,207,176,0.5);
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  }
+
+  @media (max-width:640px){
+    .navbar{ padding:16px 5vw; }
+    .hero{ padding:48px 5vw 40px; }
+    .filter-bar{ padding:20px 5vw; top:65px; }
+    .grid-wrap{ padding:32px 5vw 10px; }
+    .stat-strip{ flex-wrap:wrap; }
+    .stat{ flex:1 1 45%; border-right:none; padding-bottom:14px; }
+    .cta{ margin:40px 5vw 60px; padding:32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="back-link" href="jeflow.html">← 제주 바다 지도로</a>
+  <div class="brand-mark"><span class="logo-dot"></span><span class="mono">HAEVOLUTION</span></div>
+  <div class="page-index">지도 <b>1</b> · 인증 파트너 <b>2</b></div>
+</nav>
+
+<section class="hero">
+  <svg class="hero-stamp" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="75" cy="75" r="66" fill="none" stroke="#E2543F" stroke-width="3"/>
+    <circle cx="75" cy="75" r="56" fill="none" stroke="#E2543F" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="75" y="62" text-anchor="middle" fill="#E2543F" font-family="JetBrains Mono" font-size="12" font-weight="700">JEJU SEA</text>
+    <text x="75" y="82" text-anchor="middle" fill="#E2543F" font-family="Black Han Sans" font-size="17">인증완료</text>
+    <text x="75" y="102" text-anchor="middle" fill="#E2543F" font-family="JetBrains Mono" font-size="9">VERIFIED</text>
+  </svg>
+  <h1>무자격 강습은 <em>가라</em>,<br>인증된 곳만 여기 있습니다</h1>
+  <p>사업자등록·보험가입·안전교육 이수 여부를 직접 확인한 제주 해양레저 업체·강사 명단입니다. 도장이 많을수록 더 꼼꼼히 확인된 곳입니다.</p>
+  <div class="stat-strip">
+    <div class="stat"><div class="num" id="stat-total">--</div><div class="label">등록 파트너</div></div>
+    <div class="stat"><div class="num" id="stat-full">--</div><div class="label">4관왕 인증업체</div></div>
+    <div class="stat"><div class="num">4</div><div class="label">인증 뱃지 종류</div></div>
+    <div class="stat"><div class="num">전역</div><div class="label">활동 지역</div></div>
+  </div>
+</section>
+
+<div class="filter-bar">
+  <input id="search" type="text" placeholder="업체명 또는 지역으로 검색 (예: 서귀포, 프리다이빙)">
+  <div class="chip-group" id="type-chips"></div>
+  <div class="badge-toggle-group" id="badge-toggles"></div>
+</div>
+
+<div class="grid-wrap">
+  <div id="result-count"></div>
+  <div class="card-grid" id="card-grid"></div>
+</div>
+
+<div class="cta">
+  <div>
+    <h2>업체·강사이신가요?</h2>
+    <p>사업자등록증 또는 자격증만 있으면 무료로 인증 뱃지를 받을 수 있습니다. 검증 후 지도와 디렉토리에 노출됩니다.</p>
+  </div>
+  <a class="cta-btn" href="mailto:partner@haevolution.kr">무료로 인증 등록하기 →</a>
+</div>
+
+<footer>
+  <span>해볼루션 (Haevolution) — 제주 해양레저 인증 데이터베이스</span>
+  <span class="mono">DATA v5.1 · 2026</span>
+</footer>
+
+<script>
+/*
+  실서비스 연동 시: 아래 SAMPLE_DATA 배열을 Google Sheets 공개 CSV(강사·업체 시트)
+  PapaParse.parse(CSV_URL, { download:true, header:true, complete: renderFromRows })
+  로 대체하세요. 현재는 2라운드 대면평가용 예시 데이터입니다.
+*/
+const SAMPLE_DATA = [
+  { name:"블루홀 프리다이빙", type:"프리다이빙샵", region:"서귀포시 대정읍", desc:"AIDA 공인 강사가 운영하는 프리다이빙 전문샵. 초보자 체험 다이빙부터 강사 과정까지.", subjects:"프리다이빙 Lv1~3", lang:"한국어 · 영어", phone:"064-800-1234", sns:"blog.naver.com/bluehole", badges:["biz","ins","edu","aed"] },
+  { name:"성산블루 스쿠버", type:"스쿠버다이빙샵", region:"서귀포시 성산읍", desc:"성산일출봉 인근 펀다이빙 전문. PADI 5성 센터.", subjects:"스쿠버 펀다이빙, 오픈워터", lang:"한국어 · 영어 · 일본어", phone:"064-782-5567", sns:"instagram.com/seongsanblue", badges:["biz","ins","edu"] },
+  { name:"애월 스노클클럽", type:"스노클링샵", region:"제주시 애월읍", desc:"가족 단위 스노클링 체험 전문. 초보자 안전교육 필수 진행.", subjects:"스노클링 체험", lang:"한국어", phone:"064-799-0212", sns:"instagram.com/aewol_snorkel", badges:["biz","edu"] },
+  { name:"한림 프리다이버스", type:"프리다이빙샵", region:"제주시 한림읍", desc:"SSI 공인, 협재 인근에서 프리다이빙 클래스 운영.", subjects:"프리다이빙 Lv1~2", lang:"한국어 · 영어", phone:"064-796-3341", sns:"blog.naver.com/hallimfree", badges:["biz","ins","edu","aed"] },
+  { name:"서귀포 딥블루", type:"스쿠버다이빙샵", region:"서귀포시 법환동", desc:"문섬·범섬 다이빙 포인트 전문 안내. 20년 경력 강사진.", subjects:"스쿠버 펀다이빙, 어드밴스", lang:"한국어 · 영어", phone:"064-732-4488", sns:"deepblue-seogwipo.com", badges:["biz","ins","edu","aed"] },
+  { name:"제주 오션스노클", type:"스노클링샵", region:"제주시 조천읍", desc:"함덕해변 인근 스노클링 장비 대여 및 가이드 투어.", subjects:"스노클링 체험", lang:"한국어", phone:"064-783-9090", sns:"instagram.com/jejuocean_sno", badges:["biz"] },
+  { name:"모슬포 다이브베이스", type:"스쿠버다이빙샵", region:"서귀포시 대정읍", desc:"마라도·가파도 원정 다이빙 전문 베이스.", subjects:"스쿠버 펀다이빙, 드리프트", lang:"한국어 · 영어", phone:"064-794-7712", sns:"instagram.com/moseulpo_dive", badges:["biz","ins"] },
+  { name:"함덕 프리브릿지", type:"프리다이빙샵", region:"제주시 조천읍", desc:"함덕 얕은 해변에서 진행하는 프리다이빙 입문 클래스.", subjects:"프리다이빙 Lv1", lang:"한국어", phone:"064-783-2201", sns:"blog.naver.com/freebridge", badges:["biz","edu"] },
+  { name:"제프다 세이프투어", type:"스쿠버다이빙샵", region:"서귀포시 중문동", desc:"동호회 단체 다이빙 전문 운영, 버디 시스템 철저 관리.", subjects:"스쿠버 펀다이빙, 단체 투어", lang:"한국어", phone:"064-738-1190", sns:"instagram.com/jefda_safetour", badges:["biz","ins","edu","aed"] }
+];
+
+const BADGE_META = {
+  biz:{ label:"사업자", stamp:"사업자\n인증" },
+  ins:{ label:"보험가입", stamp:"배상책임\n보험" },
+  edu:{ label:"안전교육", stamp:"안전교육\n이수" },
+  aed:{ label:"AED보유", stamp:"AED\n보유" }
+};
+
+let activeType = "전체";
+let activeBadges = new Set();
+let query = "";
+
+function buildTypeChips(){
+  const types = ["전체", ...new Set(SAMPLE_DATA.map(d => d.type))];
+  const wrap = document.getElementById("type-chips");
+  wrap.innerHTML = types.map(t =>
+    `<button class="chip ${t===activeType?'active':''}" data-type="${t}">${t}</button>`
+  ).join("");
+  wrap.querySelectorAll(".chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      activeType = btn.dataset.type;
+      buildTypeChips();
+      render();
+    });
+  });
+}
+
+function buildBadgeToggles(){
+  const wrap = document.getElementById("badge-toggles");
+  wrap.innerHTML = Object.entries(BADGE_META).map(([key,m])=>
+    `<button class="badge-toggle ${activeBadges.has(key)?'active':''}" data-badge="${key}">${m.label}</button>`
+  ).join("");
+  wrap.querySelectorAll(".badge-toggle").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const k = btn.dataset.badge;
+      activeBadges.has(k) ? activeBadges.delete(k) : activeBadges.add(k);
+      buildBadgeToggles();
+      render();
+    });
+  });
+}
+
+function stampSVG(key){
+  const m = BADGE_META[key];
+  const lines = m.stamp.split("\n");
+  return `<div class="stamp ${key}">${lines.join("<br>")}</div>`;
+}
+
+function cardHTML(d){
+  const stamps = d.badges.map(stampSVG).join("");
+  const tags = [d.subjects, d.lang].filter(Boolean).map(t=>`<span class="meta-tag">${t}</span>`).join("");
+  return `
+  <div class="card">
+    <div class="card-stamps">${stamps}</div>
+    <div class="card-type">${d.type}</div>
+    <h3>${d.name}</h3>
+    <div class="region">${d.region}</div>
+    <div class="desc">${d.desc}</div>
+    <div class="meta-row">${tags}</div>
+    <div class="card-footer">
+      <span class="mono">${d.phone}</span>
+      <a href="https://${d.sns}" target="_blank" rel="noopener">${d.sns} ↗</a>
+    </div>
+  </div>`;
+}
+
+function render(){
+  let rows = SAMPLE_DATA.filter(d=>{
+    const typeOk = activeType==="전체" || d.type===activeType;
+    const badgeOk = [...activeBadges].every(b => d.badges.includes(b));
+    const q = query.trim().toLowerCase();
+    const searchOk = !q || d.name.toLowerCase().includes(q) || d.region.toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
+    return typeOk && badgeOk && searchOk;
+  });
+
+  document.getElementById("result-count").textContent = `${rows.length}개 파트너 표시 중`;
+  const grid = document.getElementById("card-grid");
+  grid.innerHTML = rows.length
+    ? rows.map(cardHTML).join("")
+    : `<div class="empty-state">조건에 맞는 파트너가 아직 없습니다.<br>다른 지역이나 뱃지 조합으로 검색해보세요.</div>`;
+}
+
+document.getElementById("search").addEventListener("input", (e)=>{
+  query = e.target.value;
+  render();
+});
+
+document.getElementById("stat-total").textContent = SAMPLE_DATA.length;
+document.getElementById("stat-full").textContent = SAMPLE_DATA.filter(d=>d.badges.length===4).length;
+
+const urlParams = new URLSearchParams(window.location.search);
+const qParam = urlParams.get("q");
+if (qParam){
+  query = qParam;
+  document.getElementById("search").value = qParam;
+}
+
+buildTypeChips();
+buildBadgeToggles();
+render();
+</script>
+</body>
+</html>
