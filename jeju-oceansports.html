@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>해볼루션 - 제주 해양레저스포츠 안심 지도</title>
+    <!-- Tailwind CSS (현대적인 UI 디자인용) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 카카오맵 커스텀 오버레이 스타일 (행정동 클러스터링 서클) */
+        .cluster-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(14, 165, 233, 0.85); /* Sky blue 500 */
+            border: 2px solid #ffffff;
+            color: white;
+            font-weight: bold;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .cluster-overlay:hover {
+            transform: scale(1.1);
+            background-color: rgba(2, 132, 199, 1); /* Sky blue 600 */
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- 1. 좌측 정보 사이드바 (업체 리스트) -->
+    <aside class="w-full md:w-[400px] bg-white h-[45vh] md:h-full shadow-2xl flex flex-col z-10">
+        <!-- 상단 헤더 -->
+        <div class="p-5 border-b border-slate-100 bg-sky-900 text-white">
+            <h1 class="text-2xl font-black flex items-center gap-2">
+                ⛵ Haevolution
+            </h1>
+            <p class="text-xs text-sky-200 mt-1">제주특별자치도 해양레저스포츠 사업자 안심 DB</p>
+        </div>
+
+        <!-- 안내 문구 및 상태 표시 -->
+        <div class="p-4 bg-sky-50 border-b border-sky-100">
+            <div id="selected-dong" class="text-sm font-bold text-sky-950">
+                📍 지도의 행정동 원형 마커를 클릭해 주세요.
+            </div>
+            <div class="flex gap-2 mt-2 text-[11px] text-slate-600 font-medium">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>1단계: 사업자등록</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>2단계: 상해보험</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-amber-500 rounded-full"></span>3단계: 안전강사</span>
+            </div>
+        </div>
+
+        <!-- 스크롤 가능한 리스트 영역 -->
+        <div id="company-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- 초기 상태 가이드 -->
+            <div class="text-center py-20 text-slate-400 text-sm">
+                <span class="text-3xl block mb-2">🗺️</span>
+                해당 지역의 검증된 안전 레저업체를  
+한눈에 확인하세요.
+            </div>
+        </div>
+    </aside>
+
+    <!-- 2. 우측 카카오맵 영역 -->
+    <main class="flex-1 h-[55vh] md:h-full relative">
+        <div id="map" class="w-full h-full"></div>
+    </main>
+
+    <!-- 카카오맵 SDK 로드 (발표용 가상 앱 키 포함) -->
+    <!-- 실서비스 연동 시 YOUR_APP_KEY 부분에 실제 발급받으신 자바스크립트 키를 넣으시면 됩니다. -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_APP_KEY"></script>
+
+    <script>
+        // [A] 공공데이터포털 기반 해양레저스포츠 가공 가상 데이터 (행정동별 매핑 및 3단계 인증 상태값 부여)
+        const leisureData = [
+            // 애월읍 (8개 중 일부 샘플)
+            { id: 1, name: "제주 다이브 애월", dong: "애월읍", lat: 33.4602, lng: 126.3195, type: "스쿠버다이빙, 프리다이빙", tel: "064-799-1234", step1: true, step2: true, step3: true },
+            { id: 2, name: "애월 한담 패들보드", dong: "애월읍", lat: 33.4615, lng: 126.3150, type: "패들보드, 카약", tel: "064-799-5678", step1: true, step2: true, step3: false },
+            { id: 3, name: "하귀 해양레저 클럽", dong: "애월읍", lat: 33.4830, lng: 126.4020, type: "제트스키, 바나나보트", tel: "064-799-9012", step1: true, step2: false, step3: false },
+            
+            // 한림읍 (5개 중 일부 샘플)
+            { id: 4, name: "협재 다이빙 투어", dong: "한림읍", lat: 33.4143, lng: 126.2625, type: "프리다이빙, 스노클링", tel: "064-796-1111", step1: true, step2: true, step3: true },
+            { id: 5, name: "금능 레저하우스", dong: "한림읍", lat: 33.4010, lng: 126.2510, type: "윈드서핑, 카이트보딩", tel: "064-796-2222", step1: true, step2: true, step3: false },
+            
+            // 조천읍 (4개 중 일부 샘플)
+            { id: 6, name: "함덕 서핑 스쿨", dong: "조천읍", lat: 33.5430, lng: 126.6610, type: "서핑 강습, 패들보드", tel: "064-784-3333", step1: true, step2: true, step3: true },
+            { id: 7, name: "북촌 스노클 요트", dong: "조천읍", lat: 33.5520, lng: 126.6910, type: "요트 투어, 스노클링", tel: "064-784-4444", step1: true, step2: false, step3: false },
+
+            // 성산읍 (6개 중 일부 샘플)
+            { id: 8, name: "성산 해양레저 파크", dong: "성산읍", lat: 33.4616, lng: 126.9172, type: "제트스키, 플라이보드", tel: "064-782-5555", step1: true, step2: true, step3: true },
+            { id: 9, name: "광치기 다이빙 리조트", dong: "성산읍", lat: 33.4510, lng: 126.9210, type: "스쿠버다이빙 교육", tel: "064-782-6666", step1: true, step2: true, step3: false }
+        ];
+
+        // [B] 행정동별 클러스터링 중심 좌표 및 데이터 개수 정의
+        const dongClusters = {
+            "애월읍": { lat: 33.4602, lng: 126.3195, count: 8, size: 65 },
+            "한림읍": { lat: 33.4143, lng: 126.2625, count: 5, size: 55 },
+            "조천읍": { lat: 33.5430, lng: 126.6610, count: 4, size: 50 },
+            "성산읍": { lat: 33.4616, lng: 126.9172, count: 6, size: 60 }
+        };
+
+        // [C] 카카오 지도 초기화
+        const container = document.getElementById('map');
+        const options = {
+            center: new kakao.maps.LatLng(33.3790, 126.5312), // 제주도 중심 좌표
+            level: 10 // 제주도 전체가 한눈에 들어오는 줌 레벨
+        };
+        const map = new kakao.maps.Map(container, options);
+
+        // [D] 각 행정동 위치에 원형 클러스터 오버레이 생성 및 맵핑
+        Object.keys(dongClusters).forEach(dongName => {
+            const cluster = dongClusters[dongName];
+            const position = new kakao.maps.LatLng(cluster.lat, cluster.lng);
+
+            // 커스텀 오버레이 HTML 엘리먼트 동적 생성
+            const content = document.createElement('div');
+            content.className = 'cluster-overlay';
+            content.style.width = `${cluster.size}px`;
+            content.style.height = `${cluster.size}px`;
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-[11px] opacity-90">${dongName}</div>
+                    <div class="text-base font-extrabold">${cluster.count}</div>
+                </div>
+            `;
+
+            // 클릭 이벤트 위임
+            content.addEventListener('click', () => {
+                showLeisureList(dongName);
+                // 해당 위치로 부드럽게 지도 중심 이동 및 줌인
+                map.panTo(position);
+                map.setLevel(8);
+            });
+
+            // 카카오맵 위에 얹기
+            const customOverlay = new kakao.maps.CustomOverlay({
+                position: position,
+                content: content,
+                xAnchor: 0.5,
+                yAnchor: 0.5
+            });
+            customOverlay.setMap(map);
+        });
+
+        // [E] 클릭 시 좌측 리스트에 해당 동네 업체 필터링 및 3단계 안전인증 시각화
+        function showLeisureList(dongName) {
+            const listContainer = document.getElementById('company-list');
+            const selectedTitle = document.getElementById('selected-dong');
+            
+            // 데이터 필터링
+            const filteredData = leisureData.filter(item => item.dong === dongName);
+            
+            // 헤더 정보 갱신
+            selectedTitle.innerHTML = `📍 ${dongName} 안심 업체 목록 (${filteredData.length}개 검색됨)`;
+            listContainer.innerHTML = ''; // 기존 리스트 초기화
+
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = `<div class="text-center py-10 text-slate-400">등록된 안전 가맹업체가 없습니다.</div>`;
+                return;
+            }
+
+            // 필터링된 업체를 안전 등급 배지와 함께 HTML 리스트 카드로 추가
+            filteredData.forEach(item => {
+                // 등급 판별 계산 (3종 세트가 다 차있으면 3단계 프리미엄)
+                let activeBadges = '';
+                
+                activeBadges += item.step1 
+                    ? `<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-0.5">🟢 1단계</span>` 
+                    : `<span class="px-2 py-0.5 bg-slate-100 text-slate-400 text-[10px] font-medium rounded-md line-through">1단계</span>`;
+                
+                activeBadges += item.step2 
+                    ? `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-md flex items-center gap-0.5">🔵 2단계</span>` 
+                    : `<span class="px-2 py-0.5 bg-slate-100 text-slate-400 text-[10px] font-medium rounded-md line-through">2단계</span>`;
+                
+                activeBadges += item.step3 
+                    ? `<span class="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md flex items-center gap-0.5">🟡 3단계</span>` 
+                    : `<span class="px-2 py-0.5 bg-slate-100 text-slate-400 text-[10px] font-medium rounded-md line-through">3단계</span>`;
+
+                const score = (item.step1 ? 1 : 0) + (item.step2 ? 1 : 0) + (item.step3 ? 1 : 0);
+                const isPremium = score === 3;
+
+                const cardHtml = `
+                    <div class="p-4 bg-white rounded-xl border ${isPremium ? 'border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)] bg-gradient-to-br from-amber-50/30 to-white' : 'border-slate-200'} transition hover:border-sky-400">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded mb-1 inline-block">${item.type}</span>
+                                <h3 class="text-base font-bold text-slate-900 flex items-center gap-1">
+                                    ${item.name}
+                                    ${isPremium ? '👑' : ''}
+                                </h3>
+                            </div>
+                            <span class="text-xs font-black ${isPremium ? 'text-amber-600' : 'text-slate-500'} bg-slate-50 px-2 py-1 rounded">
+                                등급: ${score}/3
+                            </span>
+                        </div>
+                        
+                        <!-- 1-3단계 인증 배지 라인 -->
+                        <div class="flex gap-1.5 my-3">
+                            ${activeBadges}
+                        </div>
+
+                        <div class="flex justify-between items-center text-xs text-slate-500 border-t border-slate-100 pt-2.5 mt-2">
+                            <span class="flex items-center gap-1">📞 ${item.tel}</span>
+                            <button class="px-2.5 py-1 bg-sky-900 text-white rounded font-bold text-[10px] hover:bg-sky-800 transition">
+                                예약 연계 ➔
+                            </button>
+                        </div>
+                    </div>
+                `;
+                listContainer.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+    </script>
+</body>
+</html>
