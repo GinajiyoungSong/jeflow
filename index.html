@@ -575,6 +575,7 @@
                         const lngVal = parseFloat(item.longitude);
                         const infoVal = (item.information || '').trim();
                         const descVal = (item.desc || '').trim();
+                        const beachNumVal = (item.beach_num || '').toString().trim(); // [신규] 해수욕장 날씨 API용 해변코드
                         if (!latVal || !lngVal || isNaN(latVal) || isNaN(lngVal) || !nameVal) return;
 
                         let marker;
@@ -602,7 +603,7 @@
 
                         if (marker) {
                             marker.on('click', () => {
-                                handleMarkerClick(marker, nameVal, typeVal, descVal, infoVal, latVal, lngVal);
+                                handleMarkerClick(marker, nameVal, typeVal, descVal, infoVal, latVal, lngVal, beachNumVal);
                             });
                         }
                     });
@@ -661,16 +662,69 @@
             return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
         }
 
-        async function handleMarkerClick(marker, name, type, desc, info, lat, lng) {
+        // [신규] Apps Script(action=beach)를 거쳐 해수욕장 파고/수온 조회
+        // ⚠️ 실제 API 응답의 정확한 필드명이 확인되지 않아, 기상청 표준 응답구조(response.body.items.item)를
+        //     기준으로 방어적으로 파싱합니다. 안 맞으면 콘솔에 찍히는 원본 응답을 보고 조정이 필요해요.
+        async function fetchBeachWeatherExtras(beachNum) {
+            const result = { waveHeight: null, waterTemp: null };
+            const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+
+            try {
+                const [waveRes, tempRes] = await Promise.all([
+                    fetchWithTimeout(`${appsScriptProxyUrl}?action=beach&type=wave&beach_num=${beachNum}`),
+                    fetchWithTimeout(`${appsScriptProxyUrl}?action=beach&type=temp&beach_num=${beachNum}`)
+                ]);
+
+                if (waveRes.ok) {
+                    const waveJson = await waveRes.json();
+                    console.log('[해수욕장 파고 API 원본 응답]', waveJson);
+                    const waveVal = extractBeachApiValue(waveJson, ['wh', 'waveHeight', 'wvhgt', 'value']);
+                    if (waveVal !== null) result.waveHeight = parseFloat(parseFloat(waveVal).toFixed(1));
+                }
+                if (tempRes.ok) {
+                    const tempJson = await tempRes.json();
+                    console.log('[해수욕장 수온 API 원본 응답]', tempJson);
+                    const tempVal = extractBeachApiValue(tempJson, ['tw', 'waterTemp', 'wtemp', 'value']);
+                    if (tempVal !== null) result.waterTemp = parseFloat(parseFloat(tempVal).toFixed(1));
+                }
+            } catch (err) {
+                console.error("해수욕장 날씨 API 조회 실패:", err);
+            }
+            return result;
+        }
+
+        // [신규] 기상청 표준 응답구조(response.body.items.item)에서 후보 필드명들을 순서대로 시도해 값 추출
+        function extractBeachApiValue(json, candidateKeys) {
+            try {
+                let items = json?.response?.body?.items?.item;
+                if (!items) return null;
+                if (!Array.isArray(items)) items = [items];
+                if (items.length === 0) return null;
+                const first = items[0];
+                for (const key of candidateKeys) {
+                    if (first[key] !== undefined && first[key] !== null && first[key] !== '') {
+                        return first[key];
+                    }
+                }
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function handleMarkerClick(marker, name, type, desc, info, lat, lng, beachNum) {
             
             // [신규] 여객선/대형·크루즈항은 법적으로 일반인 입수·스노클링이 금지된 구역
             const isRestrictedZone = (type === 'ferry' || type === 'large');
+            // [신규] 공식 해수욕장 API 사용 가능 여부 (beach 타입이면서 beach_num이 채워져 있을 때만)
+            const useBeachApi = (type === 'beach' && beachNum);
 
             marker.bindPopup(`<div style="text-align:center; padding: 12px; font-size:12px; color:#4b5563;">⏳ ${isRestrictedZone ? '항구 정보' : '실시간 해양 기상 및 물때'} 로딩 중...</div>`).openPopup();
 
             let windSpeed = 3.0; 
             let waveHeight = 0.5; 
             let wavePeriod = 5.0; 
+            let waterTemp = null; // [신규] 수온 - 해수욕장 API 성공 시에만 값이 채워짐
 
             // [수정] 입수 금지 구역은 스노클링 판단용 기상 데이터를 애초에 조회하지 않음
             if (!isRestrictedZone) {
@@ -699,6 +753,13 @@
                             wavePeriod = parseFloat(marineData.current.wave_period.toFixed(1));
                         }
                     }
+                }
+
+                // [신규] 공식 해수욕장 API로 파고/수온을 더 정확한 값으로 덮어씀 (조회 실패 시 위 Open-Meteo 값 그대로 사용)
+                if (useBeachApi) {
+                    const beachData = await fetchBeachWeatherExtras(beachNum);
+                    if (beachData.waveHeight !== null) waveHeight = beachData.waveHeight;
+                    if (beachData.waterTemp !== null) waterTemp = beachData.waterTemp;
                 }
             } catch (error) {
                 console.error("실시간 날씨 데이터 수집 실패, 가상 데이터 적용:", error);
@@ -830,6 +891,7 @@
                 evalBox.innerHTML = `
                     <div style="margin-bottom: 5px;"><b>바람:</b> ${windStatusFull}</div>
                     <div style="margin-bottom: 5px;"><b>파도:</b> ${waveStatusFull}</div>
+                    ${waterTemp !== null ? `<div style="margin-bottom: 5px;"><b>수온:</b> 🌡️ ${waterTemp}°C</div>` : ''}
                     <div><b>안전진단:</b> ${generalStatusMent()}</div>
                 `;
             }
@@ -853,35 +915,64 @@
             try {
                 const response = await fetchWithTimeout(tideApiUrl);
                 if (response.ok) {
-                    const parsedData = await response.json(); 
-                    
-                    if (parsedData.result && parsedData.result.data) {
-                        const tideList = parsedData.result.data;
-                        let lowTideArr = [];
+                    const parsedData = await response.json();
+                    console.log('[물때 API 원본 응답]', parsedData);
 
-                        tideList.forEach(item => {
-                            const timeOnly = item.tide_time ? item.tide_time.split(" ")[1].substring(0, 5) : "-";
-                            const isHigh = item.hl_code === "고조" || item.hl_code === "H";
-                            const isLow = item.hl_code === "저조" || item.hl_code === "L";
+                    // [수정] 새 API는 시간대별 조위값을 연속으로 줌 -> 극대/극소점을 찾아서 고조/저조로 판정
+                    let items = parsedData?.response?.body?.items?.item;
+                    if (items && !Array.isArray(items)) items = [items];
+
+                    if (items && items.length > 2) {
+                        // 시간/조위값 후보 필드명들을 순서대로 시도
+                        const readings = items.map(it => {
+                            const timeRaw = it.reqDate || it.recordTime || it.tm || it.obsTime || it.date_time || '';
+                            const levelRaw = it.preTdlv ?? it.obsTdlv ?? it.tideLevel ?? it.tide_level ?? it.value;
+                            return {
+                                time: timeRaw,
+                                level: parseFloat(levelRaw)
+                            };
+                        }).filter(r => !isNaN(r.level));
+
+                        // 시간 형식(YYYYMMDDHHmm 등)에서 시:분만 추출
+                        const formatTime = (t) => {
+                            const s = String(t).replace(/[^0-9]/g, '');
+                            if (s.length >= 12) return s.substring(8, 10) + ':' + s.substring(10, 12);
+                            if (s.length >= 4) return s.substring(0, 2) + ':' + s.substring(2, 4);
+                            return t;
+                        };
+
+                        let lowTideArr = [];
+                        readings.forEach((r, i) => {
+                            const prev = readings[i - 1];
+                            const next = readings[i + 1];
+                            let hlLabel = null;
+                            if (prev && next) {
+                                if (r.level >= prev.level && r.level >= next.level) hlLabel = "고조 (만조)";
+                                else if (r.level <= prev.level && r.level <= next.level) hlLabel = "저조 (간조)";
+                            }
+                            if (!hlLabel) return; // 극대/극소가 아니면 표에 안 넣음 (고조/저조만 표시)
+
+                            const isHigh = hlLabel.startsWith("고조");
                             const levelClass = isHigh ? "tide-high" : "tide-low";
                             const levelStyle = isHigh ? "" : "style='color:#93c5fd; font-weight:bold;'";
+                            const timeOnly = formatTime(r.time);
 
-                            if (isLow) {
-                                lowTideArr.push(timeOnly);
-                            }
+                            if (!isHigh) lowTideArr.push(timeOnly);
 
                             tideHtml += `
                                 <tr>
-                                    <td class="${levelClass}">${item.hl_code}</td>
+                                    <td class="${levelClass}">${hlLabel}</td>
                                     <td ${levelStyle}>${timeOnly}</td>
-                                    <td>${item.tide_level} cm</td>
+                                    <td>${r.level} cm</td>
                                 </tr>
                             `;
                         });
 
-                        lowTideTime = lowTideArr.join(", ");
-                        document.getElementById('tide-body').innerHTML = tideHtml;
-                        document.getElementById('tide-tip').innerHTML = `💡 <b>${targetStation}</b> 물때 연동 중: 저조(간조) 시간인 <b>${lowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.`;
+                        lowTideTime = lowTideArr.join(", ") || "-";
+                        if (tideHtml) {
+                            document.getElementById('tide-body').innerHTML = tideHtml;
+                            document.getElementById('tide-tip').innerHTML = `💡 <b>${targetStation}</b> 물때 연동 중: 저조(간조) 시간인 <b>${lowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.`;
+                        }
                     }
                 }
             } catch (e) {
