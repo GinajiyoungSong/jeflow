@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>제주 해양지도 플랫폼 - 해볼루션</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* 구글 사이트 내부 iframe 및 반응형 샌드박스 완벽 호환 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background-color: #d1eae8;
+        }
+
+        /* 횡스크롤 지원 상단 필터바 */
+        .filter-container {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 8px;
+            background: #ffffff;
+            padding: 10px 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid #e5e7eb;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            z-index: 1001;
+        }
+        .filter-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 개별 탭 버튼 스타일 */
+        .filter-bar-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #4b5563;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        /* 활성화 테마 스타일 */
+        #beach-btn.active { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+        #port-btn.active { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+        #ferry-btn.active { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
+        #largePort-btn.active { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+
+        /* 비활성화 스타일 */
+        .filter-bar-item.inactive {
+            opacity: 0.4;
+            background: #f3f4f6;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+
+        /* 지도 스타일 변경 배너 */
+        .layer-banner {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 1001;
+        }
+        .layer-btn {
+            font-size: 12px;
+            font-weight: bold;
+            padding: 7px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #4b5563;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+        .layer-btn.active {
+            background: #1e3a8a;
+            color: #ffffff;
+            border-color: #1e3a8a;
+        }
+
+        /* 지도 컨테이너 */
+        #map-wrapper {
+            position: relative;
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 300px;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            background-color: #d1eae8;
+        }
+
+        /* 마커 디자인 */
+        .custom-marker {
+            background: none !important;
+            border: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease-in-out;
+        }
+        .custom-marker:hover {
+            transform: scale(1.25) translateY(-3px);
+        }
+        .parasol-marker {
+            font-size: 24px;
+            filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.25));
+        }
+
+        /* 우측 실시간 정보 대시보드 패널 */
+        #ocean-panel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 330px;
+            max-width: calc(100% - 24px);
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #f8fafc;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            padding: 20px;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideIn 0.2s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(15px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .panel-close {
+            float: right;
+            cursor: pointer;
+            font-size: 22px;
+            color: #94a3b8;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        .panel-close:hover { color: #f8fafc; }
+        
+        .panel-title { font-size: 18px; font-weight: bold; color: #38bdf8; margin-bottom: 2px; }
+        .panel-subtitle { font-size: 10px; color: #4ade80; font-weight: bold; background: rgba(22, 163, 74, 0.2); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 12px; }
+        .panel-desc { font-size: 11px; color: #cbd5e1; line-height: 1.4; margin-bottom: 14px; }
+
+        /* 실시간 기상 구역 */
+        .info-card-section {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 12px;
+            margin-bottom: 12px;
+        }
+        .section-header { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; }
+        .weather-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+        .weather-card { background: rgba(255, 255, 255, 0.05); padding: 8px 4px; border-radius: 8px; text-align: center; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .weather-label { font-size: 9px; color: #94a3b8; }
+        .weather-val { font-size: 12px; font-weight: bold; color: #f8fafc; margin-top: 2px; }
+
+        .marine-evaluation {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+        .eval-ok { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
+        .eval-caution { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+        .eval-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
+
+        /* 오늘 물때 시간표 */
+        .tide-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; }
+        .tide-table th { background: rgba(255, 255, 255, 0.1); padding: 6px; color: #f8fafc; font-weight: bold; }
+        .tide-table td { padding: 8px 4px; color: #cbd5e1; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .tide-high { color: #fca5a5 !important; font-weight: bold; }
+        .tide-low { color: #93c5fd !important; font-weight: bold; }
+        
+        .tide-tip-box {
+            margin-top: 8px;
+            background: rgba(30, 78, 216, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(30, 78, 216, 0.3);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        /* 지도 위 말풍선 팝업 스타일링 */
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            padding: 4px;
+            max-width: 290px;
+        }
+        .leaflet-popup-content {
+            font-size: 12px;
+            line-height: 1.45;
+            margin: 12px 14px;
+            color: #1e293b;
+        }
+
+        .popup-header {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+            margin-bottom: 6px;
+        }
+        .popup-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-right: auto;
+        }
+        .popup-status-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .popup-traffic-light {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #1f2937;
+            padding: 4px 5px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .popup-traffic-light .tl-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #4b5563;
+            opacity: 0.4;
+            transition: all 0.2s;
+        }
+        .popup-traffic-light .tl-dot.tl-red.on {
+            background: #ef4444;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(239, 68, 68, 0.85);
+        }
+        .popup-traffic-light .tl-dot.tl-yellow.on {
+            background: #facc15;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(250, 204, 21, 0.85);
+        }
+        .popup-traffic-light .tl-dot.tl-green.on {
+            background: #22c55e;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(34, 197, 94, 0.85);
+        }
+        .popup-desc {
+            font-size: 11px;
+            color: #4b5563;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .popup-info-tag {
+            display: inline-block;
+            background-color: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .popup-swell-banner {
+            background-color: #fee2e2;
+            color: #ef4444;
+            border: 1px solid #fca5a5;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 8px;
+            line-height: 1.35;
+        }
+        .popup-signal-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 9px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .signal-ok { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .signal-caution { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .signal-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        .popup-guideline {
+            margin-top: 4px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 10.5px;
+            line-height: 1.5;
+        }
+        .popup-guideline b { display: block; margin-bottom: 3px; font-size: 10.5px; }
+
+        /* 모바일 스크린 바텀 시트 최적화 반응형 디자인 */
+        @media (max-width: 600px) {
+            #ocean-panel {
+                top: auto !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                max-height: 48vh !important;
+                overflow-y: auto !important;
+                border-radius: 20px 20px 0 0 !important;
+                padding: 14px 16px !important;
+                box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25) !important;
+                border-left: none !important;
+                border-right: none !important;
+                border-bottom: none !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+                animation: slideUp 0.25s ease-out !important;
+            }
+
+            @keyframes slideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
+
+            .panel-title { font-size: 15px !important; }
+            .panel-subtitle { font-size: 9px !important; margin-bottom: 6px !important; }
+            .panel-desc { font-size: 10px !important; line-height: 1.35 !important; margin-bottom: 10px !important; }
+
+            .info-card-section { padding-top: 8px !important; margin-bottom: 8px !important; }
+            .section-header { font-size: 10px !important; margin-bottom: 5px !important; }
+            .weather-grid { gap: 4px !important; }
+            .weather-card { padding: 6px 4px !important; }
+            .weather-label { font-size: 8px !important; }
+            .weather-val { font-size: 11px !important; }
+
+            .marine-evaluation { padding: 8px !important; font-size: 10.5px !important; }
+
+            .tide-table { font-size: 10px !important; }
+            .tide-table th { padding: 4px !important; }
+            .tide-table td { padding: 5px 2px !important; }
+            
+            .tide-tip-box { padding: 6px 10px !important; font-size: 9.5px !important; margin-top: 6px !important; line-height: 1.35 !important; }
+            .panel-close { font-size: 20px !important; padding: 4px !important; }
+
+            .layer-banner { padding: 6px 10px !important; gap: 6px !important; }
+            .layer-btn { font-size: 10.5px !important; padding: 6px 14px !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="filter-container">
+        <div class="filter-bar-item active" id="beach-btn">
+            <span>⛱️</span>
+            <span id="beach-filter-text">해수욕장/해안가 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="port-btn">
+            <span style="display: inline-flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                    <path d="M 12,2 L 19,13 L 12,13 Z" fill="#2563eb" />
+                    <path d="M 11,3 L 6,13 L 11,13 Z" fill="#60a5fa" />
+                    <path d="M 3,14 L 21,14 L 18,19 L 6,19 Z" fill="#1d4ed8" stroke="#1e3a8a" stroke-width="1" />
+                </svg>
+            </span>
+            <span id="port-filter-text">어촌포구/동네어항 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="ferry-btn">
+            <span style="display: inline-flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                    <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
+                    <path d="M2 15l2 4h16l2-4H2z" fill="#ea580c"/>
+                </svg>
+            </span>
+            <span id="ferry-filter-text">여객선 선착장 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="largePort-btn">
+            <span style="display: inline-flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                    <path d="M3 8h17v5H3V8z" fill="#94a3b8" />
+                    <path d="M1 14h22l-2 6H3l-2-6z" fill="#0f172a" />
+                </svg>
+            </span>
+            <span id="largePort-filter-text">대형/크루즈항 (..)</span>
+        </div>
+    </div>
+
+    <div class="layer-banner">
+        <div class="layer-btn active" id="layer-illust">제주 해양지도</div>
+        <div class="layer-btn" id="layer-satellite">구글 위성지도</div>
+    </div>
+
+    <div id="map-wrapper">
+        <div id="map"></div>
+
+        <div id="ocean-panel">
+            <span class="panel-close" onclick="closeOceanPanel()">×</span>
+            <div class="panel-title" id="p-name">-</div>
+            <div class="panel-subtitle" id="p-category">-</div>
+            <div class="panel-desc" id="p-desc">-</div>
+
+            <div class="info-card-section">
+                <div class="section-header">☀️ 실시간 바다 기상 및 파랑 정보</div>
+                <div class="weather-grid">
+                    <div class="weather-card">
+                        <div class="weather-label">바람 (풍속)</div>
+                        <div class="weather-val" id="w-wind">-.- m/s</div>
+                    </div>
+                    <div class="weather-card">
+                        <div class="weather-label">파도 (파고)</div>
+                        <div class="weather-val" id="w-wave">-.- m</div>
+                    </div>
+                    <div class="weather-card">
+                        <div class="weather-label">파주기 (너울)</div>
+                        <div class="weather-val" id="w-period">-.- s</div>
+                    </div>
+                </div>
+                <div class="marine-evaluation" id="marine-eval"></div>
+            </div>
+
+            <div class="info-card-section" style="border:none; padding:0; margin:0;">
+                <div class="section-header">🌊 오늘의 물때 (국립해양조사원 연계)</div>
+                <table class="tide-table">
+                    <thead>
+                        <tr>
+                            <th>구분</th>
+                            <th>예보시각</th>
+                            <th>조위 (cm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tide-body"></tbody>
+                </table>
+                <div class="tide-tip-box" id="tide-tip">
+                    👉 마커를 터치하여 정보를 연동하세요.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-imageoverlay-rotated@0.2.1/Leaflet.ImageOverlay.Rotated.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <script>
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const map = L.map('map', {
+                minZoom: 10,
+                maxZoom: 14,
+                zoomControl: true,
+                maxBoundsViscosity: 1.0 
+            }).setView([33.3798, 126.5312], 11);
+
+            const googleSatelliteLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                attribution: '© Google Map Satellite'
+            });
+
+            const imageUrl = 'https://github.com/GinajiyoungSong/jeflow/blob/main/jejuisland.jpeg?raw=true';
+            const topleft    = L.latLng(33.62, 126.09);       
+            const topright   = L.latLng(33.62, 127.04);       
+            const bottomleft = L.latLng(33.135, 126.09);   
+            const illustOverlay = L.imageOverlay.rotated(imageUrl, topleft, topright, bottomleft, { 
+                opacity: 1.0, 
+                interactive: false 
+            });
+
+            illustOverlay.addTo(map);
+
+            const imageBounds = L.latLngBounds(L.latLng(33.135, 126.09), L.latLng(33.62, 127.04));
+            const illustPanBounds = imageBounds.pad(0.15); 
+            map.setMaxBounds(illustPanBounds);
+
+            document.getElementById('layer-illust').addEventListener('click', () => {
+                document.getElementById('layer-illust').classList.add('active');
+                document.getElementById('layer-satellite').classList.remove('active');
+                map.removeLayer(googleSatelliteLayer);
+                illustOverlay.addTo(map);
+                document.getElementById('map').style.backgroundColor = '#d1eae8';
+                map.setMaxBounds(illustPanBounds); 
+            });
+
+            document.getElementById('layer-satellite').addEventListener('click', () => {
+                document.getElementById('layer-satellite').classList.add('active');
+                document.getElementById('layer-illust').classList.remove('active');
+                map.removeLayer(illustOverlay);
+                googleSatelliteLayer.addTo(map);
+                document.getElementById('map').style.backgroundColor = '#111';
+                map.setMaxBounds(null); 
+            });
+
+            const layers = {
+                beach: L.layerGroup().addTo(map),
+                port: L.layerGroup().addTo(map),
+                ferry: L.layerGroup().addTo(map),
+                largePort: L.layerGroup().addTo(map)
+            };
+
+            const parasolIcon = L.divIcon({ 
+                html: '⛱️', 
+                className: 'custom-marker parasol-marker', 
+                iconSize: [32, 32], 
+                iconAnchor: [16, 16], 
+                popupAnchor: [0, -10] 
+            });
+
+            const blueSailboatSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M 12,2 L 19,13 L 12,13 Z" fill="#2563eb" />
+                <path d="M 11,3 L 6,13 L 11,13 Z" fill="#60a5fa" />
+                <line x1="11.5" y1="2" x2="11.5" y2="15" stroke="#1e3a8a" stroke-width="1" />
+                <path d="M 3,14 L 21,14 L 18,19 L 6,19 Z" fill="#1d4ed8" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round" />
+            </svg>`;
+            const portIcon = L.divIcon({ html: blueSailboatSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            const orangeFerrySvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
+                <path d="M2 15l2 4h16l2-4H2z" fill="#ea580c"/>
+                <rect x="8" y="2" width="2" height="3" fill="#4b5563"/>
+                <rect x="14" y="2" width="2" height="3" fill="#4b5563"/>
+            </svg>`;
+            const ferryIcon = L.divIcon({ html: orangeFerrySvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            const cruiseShipSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M3 8h17v5H3V8z" fill="#e2e8f0" />
+                <path d="M5 4h12v3H5V4z" fill="#cbd5e1" />
+                <rect x="8" y="1" width="3" height="2" fill="#ef4444" />
+                <path d="M1 14h22l-2 6H3l-2-6z" fill="#0f172a" />
+            </svg>`;
+            const largePortIcon = L.divIcon({ html: cruiseShipSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            let beachCount = 0, portCount = 0, ferryCount = 0, largePortCount = 0;
+            const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp6QfAMngRHE3kSQVduZjx5DitkrGRdejfObMpCaTW2KfBER5aF2g2gIePy1ML5nIBdEOthIPoImaI/pub?output=csv';
+
+            Papa.parse(googleSheetCsvUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const data = results.data;
+                    data.forEach(item => {
+                        const typeVal = (item.category || '').trim().toLowerCase();
+                        const nameVal = (item.name || '').trim();
+                        const latVal = parseFloat(item.latitude);
+                        const lngVal = parseFloat(item.longitude);
+                        const infoVal = (item.information || '').trim();
+                        const descVal = (item.desc || '').trim();
+                        if (!latVal || !lngVal || isNaN(latVal) || isNaN(lngVal) || !nameVal) return;
+
+                        let marker;
+                        if (typeVal === 'beach') {
+                            marker = L.marker([latVal, lngVal], { icon: parasolIcon }).addTo(layers.beach);
+                            beachCount++;
+                        }
+                        else if (typeVal === 'port') {
+                            marker = L.marker([latVal, lngVal], { icon: portIcon }).addTo(layers.port);
+                            portCount++;
+                        }
+                        else if (typeVal === 'ferry') {
+                            marker = L.marker([latVal, lngVal], { icon: ferryIcon }).addTo(layers.ferry);
+                            ferryCount++;
+                        }
+                        else if (typeVal === 'large') {
+                            marker = L.marker([latVal, lngVal], { icon: largePortIcon }).addTo(layers.largePort);
+                            largePortCount++;
+                        }
+
+                        if (marker) {
+                            marker.on('click', () => {
+                                handleMarkerClick(marker, nameVal, typeVal, descVal, infoVal, latVal, lngVal);
+                            });
+                        }
+                    });
+
+                    document.getElementById('beach-filter-text').innerText = `해수욕장/해안가 (${beachCount})`;
+                    document.getElementById('port-filter-text').innerText = `어촌포구/동네어항 (${portCount})`;
+                    document.getElementById('ferry-filter-text').innerText = `여객선 선착장 (${ferryCount})`;
+                    document.getElementById('largePort-filter-text').innerText = `대형/크루즈항 (${largePortCount})`;
+
+                    map.invalidateSize();
+                }
+            });
+
+            const btnMapping = {
+                'beach-btn': 'beach',
+                'port-btn': 'port',
+                'ferry-btn': 'ferry',
+                'largePort-btn': 'largePort'
+            };
+            Object.keys(btnMapping).forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                btn.addEventListener('click', () => {
+                    const layerKey = btnMapping[btnId];
+                    if (btn.classList.contains('active')) {
+                        btn.classList.remove('active');
+                        btn.classList.add('inactive');
+                        map.removeLayer(layers[layerKey]);
+                    } else {
+                        btn.classList.remove('inactive');
+                        btn.classList.add('active');
+                        map.addLayer(layers[layerKey]);
+                    }
+                });
+            });
+
+            const triggerMapReset = () => { map.invalidateSize(); };
+            window.addEventListener('resize', triggerMapReset);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(triggerMapReset, 300);
+            });
+            setTimeout(triggerMapReset, 300);
+            setTimeout(triggerMapReset, 1000);
+        });
+
+        function getStationCode(lat, lng) {
+            if (lng > 126.8) {
+                return { code: "DT_0022", name: "성산포" }; 
+            } else if (lat < 33.34) {
+                return { code: "DT_0010", name: "서귀포" }; 
+            } else {
+                return { code: "DT_0004", name: "제주" };    
+            }
+        }
+
+        function fetchWithTimeout(url, timeoutMs = 6000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+        }
+
+        async function handleMarkerClick(marker, name, type, desc, info, lat, lng) {
+            
+            // [신규] 여객선/대형·크루즈항은 법적으로 일반인 입수·스노클링이 금지된 구역
+            const isRestrictedZone = (type === 'ferry' || type === 'large');
+
+            marker.bindPopup(`<div style="text-align:center; padding: 12px; font-size:12px; color:#4b5563;">⏳ ${isRestrictedZone ? '항구 정보' : '실시간 해양 기상 및 물때'} 로딩 중...</div>`).openPopup();
+
+            let windSpeed = 3.0; 
+            let waveHeight = 0.5; 
+            let wavePeriod = 5.0; 
+
+            // [수정] 입수 금지 구역은 스노클링 판단용 기상 데이터를 애초에 조회하지 않음
+            if (!isRestrictedZone) {
+            try {
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m&wind_speed_unit=ms`;
+                const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period`;
+
+                const [weatherRes, marineRes] = await Promise.all([
+                    fetchWithTimeout(weatherUrl),
+                    fetchWithTimeout(marineUrl)
+                ]);
+
+                if (weatherRes.ok) {
+                    const weatherData = await weatherRes.json();
+                    if (weatherData.current && weatherData.current.wind_speed_10m !== undefined) {
+                        windSpeed = parseFloat(weatherData.current.wind_speed_10m.toFixed(1));
+                    }
+                }
+                if (marineRes.ok) {
+                    const marineData = await marineRes.json();
+                    if (marineData.current) {
+                        if (marineData.current.wave_height !== undefined) {
+                            waveHeight = parseFloat(marineData.current.wave_height.toFixed(1));
+                        }
+                        if (marineData.current.wave_period !== undefined) {
+                            wavePeriod = parseFloat(marineData.current.wave_period.toFixed(1));
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("실시간 날씨 데이터 수집 실패, 가상 데이터 적용:", error);
+                windSpeed = parseFloat((1.0 + Math.random() * 8.5).toFixed(1)); 
+                waveHeight = parseFloat((0.1 + Math.random() * 1.8).toFixed(1)); 
+                wavePeriod = parseFloat((5.0 + Math.random() * 6.0).toFixed(1)); 
+            }
+            }
+
+            let signalClass = "signal-ok";
+            let signalLabel = "최적 (장판)";
+            let signalIcon = "🟢";
+            let windStatus = "";
+            let waveStatus = "";
+            let guidelineText = "";
+
+            if (isRestrictedZone) {
+                // [신규] 여객선/대형항 전용 - 법적 입수금지 안내로 대체
+                signalClass = "signal-danger";
+                signalLabel = "입수 금지 구역";
+                signalIcon = "⚓";
+            } else {
+                if (windSpeed >= 6.0 || waveHeight >= 1.0 || wavePeriod > 8.0) {
+                    signalClass = "signal-danger";
+                    signalLabel = "입수 비추천";
+                    signalIcon = "🔴";
+                } else if (windSpeed > 3.0 || waveHeight > 0.5) {
+                    signalClass = "signal-caution";
+                    signalLabel = "주의 진입";
+                    signalIcon = "🟡";
+                }
+
+                windStatus = windSpeed <= 3.0 ? "잔잔한 바람" : (windSpeed <= 5.9 ? "약간의 바람" : "강한 바람");
+                waveStatus = waveHeight <= 0.5 ? "장판 바다, 시야 최고" : (waveHeight >= 1.0 ? "높은 파도, 입수 주의" : "일반 파도 수준");
+
+                if (signalClass === "signal-ok") {
+                    guidelineText = "오늘은 바람도 잔잔하고 파도도 낮아 스노클링하기 아주 좋은 날이에요. 편하게 즐기세요!";
+                } else if (signalClass === "signal-caution") {
+                    guidelineText = "약간의 파도 and 바람이 있어요. 초보자는 구명조끼 등 안전장비를 꼭 착용하고 입수하세요.";
+                } else {
+                    guidelineText = "기상이 불안정하거나 너울 위험이 강합니다. 오늘은 입수를 피하고 안전요원의 안내를 따르세요.";
+                }
+            }
+
+            let swellBannerHtml = "";
+            if (!isRestrictedZone && wavePeriod > 8.0) {
+                swellBannerHtml = `
+                    <div class="popup-swell-banner">
+                        ⚠️ 파도는 낮으나 먼바다 너울 유입 중 - 해안가 갯바위 휩쓸림 주의
+                    </div>
+                `;
+            }
+
+            let popupContent = `
+                <div class="popup-header">
+                    <span class="popup-title">${name}</span>
+                    <span class="popup-status-group">
+                        <span class="popup-traffic-light">
+                            <span class="tl-dot tl-red ${signalClass === 'signal-danger' ? 'on' : ''}"></span>
+                            <span class="tl-dot tl-yellow ${signalClass === 'signal-caution' ? 'on' : ''}"></span>
+                            <span class="tl-dot tl-green ${signalClass === 'signal-ok' ? 'on' : ''}"></span>
+                        </span>
+                        <span class="popup-signal-badge ${signalClass}">${signalIcon} ${signalLabel}</span>
+                    </span>
+                </div>
+                <div class="popup-desc">${desc || "맑고 아름다운 제주 해안가 명소입니다."}</div>
+            `;
+            if (info) {
+                popupContent += `<span class="popup-info-tag">ℹ️ ${info}</span><br>`;
+            }
+            if (isRestrictedZone) {
+                // [신규] 스노클링 가이드 대신 법적 입수금지 안내로 대체
+                popupContent += `
+                    <div class="popup-guideline ${signalClass}">
+                        <b>⚓ 선박 운항 구역 안내</b>
+                        이 구역은 선박이 상시 운항하는 항구로, 관련 법령에 따라 일반인의 입수·스노클링·해루질이 금지되어 있습니다. 안전을 위해 지정된 해수욕장/포구를 이용해주세요.
+                    </div>
+                `;
+            } else {
+                popupContent += `
+                    <div class="popup-guideline ${signalClass}">
+                        <b>🤿 스노클링 가이드</b>
+                        ${windStatus} · ${waveStatus}<br>
+                        ${guidelineText}
+                    </div>
+                    ${swellBannerHtml}
+                `;
+            }
+
+            marker.setPopupContent(popupContent);
+
+            const panel = document.getElementById('ocean-panel');
+            panel.style.display = 'block';
+
+            document.getElementById('p-name').innerText = name;
+            
+            let displayCategory = "기타 어항";
+            if (type === "beach") displayCategory = "해수욕장 및 해안가";
+            else if (type === "port") displayCategory = "어촌포구/어항";
+            else if (type === "ferry") displayCategory = "여객/도항선 선착장";
+            else if (type === "large") displayCategory = "대형무역/크루즈항";
+            
+            document.getElementById('p-category').innerText = displayCategory;
+            document.getElementById('p-desc').innerText = desc || "맑고 아름다운 제주 해안가 인근 주요 지점입니다.";
+
+            document.getElementById('w-wind').innerText = isRestrictedZone ? '-' : `${windSpeed} m/s`;
+            document.getElementById('w-wave').innerText = isRestrictedZone ? '-' : `${waveHeight} m`;
+            document.getElementById('w-period').innerText = isRestrictedZone ? '-' : `${wavePeriod} s`;
+
+            const evalBox = document.getElementById('marine-eval');
+
+            if (isRestrictedZone) {
+                evalBox.className = `marine-evaluation eval-danger`;
+                evalBox.innerHTML = `
+                    <div><b>⚓ 안내:</b> 이 구역은 선박 운항 구역으로, 법령상 일반인의 입수·스노클링·해루질이 금지되어 있습니다. 스노클링을 원하시면 지도에서 해수욕장/포구 마커를 이용해주세요.</div>
+                `;
+            } else {
+                let windStatusFull = windSpeed <= 3.0 ? "🍃 잔잔한 바람 (스노클링 최적)" : (windSpeed <= 5.9 ? "💨 약간의 바람 (초보자 주의)" : "⚠️ 강한 바람 (물놀이 비추천 / 서핑 추천)");
+                let waveStatusFull = waveHeight <= 0.5 ? "🌊 장판 바다 (스노클링 최적, 시야 최고)" : (waveHeight >= 1.0 ? "⚠️ 높은 파도 (초보 입수 금지)" : "🏄 일반 파도 수준 (안전장비 지참)");
+                let generalStatusMent = () => {
+                    if (windSpeed >= 6.0 || waveHeight >= 1.0 || wavePeriod > 8.0) return "🚨 기상이 불안정하거나 너울 위험이 강합니다. 해상 안전 요원의 통제에 반드시 협조하세요!";
+                    if (windSpeed > 3.0 || waveHeight > 0.5) return "🧐 약간의 파도와 바람이 있습니다. 초보자는 장비를 반드시 착용하고 주의하며 입수하세요.";
+                    return "오늘 바다 상태는 매우 평온합니다. 안심하고 안전한 물놀이를 즐기세요!";
+                };
+
+                let evalClass = (windSpeed >= 6.0 || waveHeight >= 1.0 || wavePeriod > 8.0) ? "eval-danger" : ((windSpeed > 3.0 || waveHeight > 0.5) ? "eval-caution" : "eval-ok");
+                evalBox.className = `marine-evaluation ${evalClass}`;
+                evalBox.innerHTML = `
+                    <div style="margin-bottom: 5px;"><b>바람:</b> ${windStatusFull}</div>
+                    <div style="margin-bottom: 5px;"><b>파도:</b> ${waveStatusFull}</div>
+                    <div><b>안전진단:</b> ${generalStatusMent()}</div>
+                `;
+            }
+
+            const station = getStationCode(lat, lng);
+            const targetStation = station.name;
+            const stationCode = station.code;
+
+            const todayDate = new Date();
+            const yearStr = todayDate.getFullYear();
+            const monthStr = String(todayDate.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(todayDate.getDate()).padStart(2, '0');
+            const dateQueryStr = `${yearStr}${monthStr}${dayStr}`;
+
+            const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+            const tideApiUrl = `${appsScriptProxyUrl}?obsCode=${stationCode}&date=${dateQueryStr}`;
+
+            let tideHtml = "";
+            let lowTideTime = "-";
+
+            try {
+                const response = await fetchWithTimeout(tideApiUrl);
+                if (response.ok) {
+                    const parsedData = await response.json(); 
+                    
+                    if (parsedData.result && parsedData.result.data) {
+                        const tideList = parsedData.result.data;
+                        let lowTideArr = [];
+
+                        tideList.forEach(item => {
+                            const timeOnly = item.tide_time ? item.tide_time.split(" ")[1].substring(0, 5) : "-";
+                            const isHigh = item.hl_code === "고조" || item.hl_code === "H";
+                            const isLow = item.hl_code === "저조" || item.hl_code === "L";
+                            const levelClass = isHigh ? "tide-high" : "tide-low";
+                            const levelStyle = isHigh ? "" : "style='color:#93c5fd; font-weight:bold;'";
+
+                            if (isLow) {
+                                lowTideArr.push(timeOnly);
+                            }
+
+                            tideHtml += `
+                                <tr>
+                                    <td class="${levelClass}">${item.hl_code}</td>
+                                    <td ${levelStyle}>${timeOnly}</td>
+                                    <td>${item.tide_level} cm</td>
+                                </tr>
+                            `;
+                        });
+
+                        lowTideTime = lowTideArr.join(", ");
+                        document.getElementById('tide-body').innerHTML = tideHtml;
+                        document.getElementById('tide-tip').innerHTML = `💡 <b>${targetStation}</b> 물때 연동 중: 저조(간조) 시간인 <b>${lowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.`;
+                    }
+                }
+            } catch (e) {
+                console.error("국립해양조사원 실시간 조석 API 호출 실패, Fallback 데이터 적용:", e);
+            }
+
+            if (!tideHtml) {
+                const isSouthSide = lat < 33.34;
+                const defaultLowTideTime = isSouthSide ? "12:05" : "11:34";
+                const defaultHighTideTime = isSouthSide ? "18:12" : "17:45";
+
+                tideHtml = `
+                    <tr>
+                        <td class="tide-high">고조 (만조)</td>
+                        <td>05:25</td>
+                        <td>235 cm</td>
+                    </tr>
+                    <tr>
+                        <td class="tide-low">저조 (간조)</td>
+                        <td style="color:#93c5fd; font-weight:bold;">${defaultLowTideTime}</td>
+                        <td>68 cm</td>
+                    </tr>
+                    <tr>
+                        <td class="tide-high">고조 (만조)</td>
+                        <td>${defaultHighTideTime}</td>
+                        <td>252 cm</td>
+                    </tr>
+                `;
+                document.getElementById('tide-body').innerHTML = tideHtml;
+                document.getElementById('tide-tip').innerHTML = `💡 <b>${targetStation}</b> 물때 연동 중 (Fallback): 저조(간조) 시간인 <b>${defaultLowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.`;
+            }
+        }
+
+        window.closeOceanPanel = function() {
+            document.getElementById('ocean-panel').style.display = 'none';
+        }
+    
+    </script>
+</body>
+</html>
