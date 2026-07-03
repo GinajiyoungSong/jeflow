@@ -823,20 +823,17 @@
             const dayStr = String(todayDate.getDate()).padStart(2, '0');
             const dateQueryStr = `${yearStr}${monthStr}${dayStr}`;
 
-            const apiKey = "d273b665e9fd1be93b9de01c39880ce9135632dfebde539dc7dd79c477512a8b";
-            
-            // [CORS 우회 우수 사례] allorigins 프록시 주소를 이용하여 국립해양조사원 데이터를 실시간으로 파싱
-            const targetTideUrl = `https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do?ServiceKey=${apiKey}&ObsCode=${stationCode}&Date=${dateQueryStr}&ResultType=json`;
-            const proxyTideUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetTideUrl)}`;
+            // API 키는 Apps Script 안에서만 사용되고 브라우저에는 노출되지 않음
+            const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+            const tideApiUrl = `${appsScriptProxyUrl}?obsCode=${stationCode}&date=${dateQueryStr}`;
 
             let tideHtml = "";
             let lowTideTime = "-";
 
             try {
-                const response = await fetch(proxyTideUrl);
+                const response = await fetch(tideApiUrl);
                 if (response.ok) {
-                    const rawData = await response.json();
-                    const parsedData = JSON.parse(rawData.contents); // 프록시 내 실제 json 추출
+                    const parsedData = await response.json(); // [수정] allorigins 래핑 없이 바로 JSON 파싱
                     
                     if (parsedData.result && parsedData.result.data) {
                         const tideList = parsedData.result.data;
