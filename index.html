@@ -656,7 +656,7 @@
             }
         }
 
-        function fetchWithTimeout(url, timeoutMs = 6000) {
+        function fetchWithTimeout(url, timeoutMs = 10000) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
             return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
@@ -913,7 +913,7 @@
             let lowTideTime = "-";
 
             try {
-                const response = await fetchWithTimeout(tideApiUrl);
+                const response = await fetchWithTimeout(tideApiUrl, 15000);
                 if (response.ok) {
                     const parsedData = await response.json();
                     console.log('[물때 API 원본 응답]', parsedData);
