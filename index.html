@@ -920,14 +920,20 @@
 
                     // [수정] 새 API는 시간대별 조위값을 연속으로 줌 -> 극대/극소점을 찾아서 고조/저조로 판정
                     // [수정] 실제 응답에 response 래퍼가 없는 것으로 확인됨 - 두 형태 다 시도
-                    let items = parsedData?.body?.items?.item || parsedData?.response?.body?.items?.item;
+                    // [수정] items가 {item: [...]} 형태일 수도, items 자체가 바로 배열일 수도 있어서 둘 다 처리
+                    const itemsRaw = parsedData?.body?.items ?? parsedData?.response?.body?.items;
+                    console.log('[물때 API - items 원본]', itemsRaw);
+                    let items = itemsRaw?.item ?? itemsRaw;
                     if (items && !Array.isArray(items)) items = [items];
+                    if (items && items.length > 0) {
+                        console.log('[물때 API - 첫 항목 구조]', items[0]);
+                    }
 
                     if (items && items.length > 2) {
                         // 시간/조위값 후보 필드명들을 순서대로 시도
                         const readings = items.map(it => {
-                            const timeRaw = it.reqDate || it.recordTime || it.tm || it.obsTime || it.date_time || '';
-                            const levelRaw = it.preTdlv ?? it.obsTdlv ?? it.tideLevel ?? it.tide_level ?? it.value;
+                            const timeRaw = it.obsrvnDt || it.reqDate || it.recordTime || it.tm || it.obsTime || it.date_time || '';
+                            const levelRaw = it.tdlvHgt ?? it.bscTdlvHgt ?? it.preTdlv ?? it.obsTdlv ?? it.tideLevel ?? it.tide_level ?? it.value;
                             return {
                                 time: timeRaw,
                                 level: parseFloat(levelRaw)
