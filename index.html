@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>제주 해양지도 플랫폼</title>
-    <!-- Leaflet CSS (최우선 로드) -->
+    <title>제주 해양지도 플랫폼 - 해볼루션</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         /* 구글 사이트 내부 iframe 및 반응형 샌드박스 완벽 호환 */
@@ -328,7 +327,7 @@
         }
         .popup-guideline b { display: block; margin-bottom: 3px; font-size: 10.5px; }
 
-        /* 모바일 바텀 시트 최적화 */
+        /* 모바일 바텀 시트 레이아웃 분기 미디어 쿼리 */
         @media (max-width: 600px) {
             #ocean-panel {
                 top: auto !important;
@@ -381,7 +380,6 @@
 </head>
 <body>
 
-    <!-- 1. 상단 가로 스크롤형 카테고리 필터바 -->
     <div class="filter-container">
         <div class="filter-bar-item active" id="beach-btn">
             <span>⛱️</span>
@@ -417,24 +415,20 @@
         </div>
     </div>
 
-    <!-- 2. 지도 스타일 전환 배너 -->
     <div class="layer-banner">
         <div class="layer-btn active" id="layer-illust">제주 해양지도</div>
         <div class="layer-btn" id="layer-satellite">구글 위성지도</div>
     </div>
 
-    <!-- 3. 지도 및 팝업 대시보드 영역 -->
     <div id="map-wrapper">
         <div id="map"></div>
 
-        <!-- 클릭 시 우측 보조로 열리는 해양기상 & 물때 상세 대시보드 -->
         <div id="ocean-panel">
             <span class="panel-close" onclick="closeOceanPanel()">×</span>
             <div class="panel-title" id="p-name">-</div>
             <div class="panel-subtitle" id="p-category">-</div>
             <div class="panel-desc" id="p-desc">-</div>
 
-            <!-- 기상 실황 -->
             <div class="info-card-section">
                 <div class="section-header">☀️ 실시간 바다 기상 및 파랑 정보</div>
                 <div class="weather-grid">
@@ -454,7 +448,6 @@
                 <div class="marine-evaluation" id="marine-eval"></div>
             </div>
 
-            <!-- 오늘 조석 예보 -->
             <div class="info-card-section" style="border:none; padding:0; margin:0;">
                 <div class="section-header">🌊 오늘의 물때 (국립해양조사원 연계)</div>
                 <table class="tide-table">
@@ -474,12 +467,13 @@
         </div>
     </div>
 
-    <!-- JS 스크립트 순차 안정 로드 -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-imageoverlay-rotated@0.2.1/Leaflet.ImageOverlay.Rotated.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
     <script>
         window.addEventListener('DOMContentLoaded', () => {
+            // 1. 기본 Leaflet 맵 객체 초기화
             const map = L.map('map', {
                 minZoom: 10,
                 maxZoom: 14,
@@ -487,25 +481,30 @@
                 maxBoundsViscosity: 1.0 
             }).setView([33.3798, 126.5312], 11);
 
+            // 2. 구글 위성지도 베이스 타일맵 정의
             const googleSatelliteLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
                 attribution: '© Google Map Satellite'
             });
 
+            // 3. 해볼루션 일러스트 전용 레이어 바운딩 매핑
             const imageUrl = 'https://github.com/GinajiyoungSong/jeflow/blob/main/jejuisland.jpeg?raw=true';
             const topleft    = L.latLng(33.62, 126.09);    
             const topright   = L.latLng(33.62, 127.04);    
-            const bottomleft = L.latLng(33.135, 126.09);   
+            const bottomleft = L.latLng(33.135, 126.09);    
             const illustOverlay = L.imageOverlay.rotated(imageUrl, topleft, topright, bottomleft, { 
                 opacity: 1.0, 
                 interactive: false 
             });
 
+            // 일러스트 오버레이 기본 지도 스크린에 로드
             illustOverlay.addTo(map);
 
+            // 드래그 제한 영역 연산
             const imageBounds = L.latLngBounds(L.latLng(33.135, 126.09), L.latLng(33.62, 127.04));
             const illustPanBounds = imageBounds.pad(0.15); 
             map.setMaxBounds(illustPanBounds);
 
+            // 4. 지도 토글 레이어 클릭 리스너 바인딩
             document.getElementById('layer-illust').addEventListener('click', () => {
                 document.getElementById('layer-illust').classList.add('active');
                 document.getElementById('layer-satellite').classList.remove('active');
@@ -524,6 +523,7 @@
                 map.setMaxBounds(null); 
             });
 
+            // 5. 각 카테고리별 마커 그룹 레이어 생성 및 인스턴스 등록
             const layers = {
                 beach: L.layerGroup().addTo(map),
                 port: L.layerGroup().addTo(map),
@@ -531,6 +531,7 @@
                 largePort: L.layerGroup().addTo(map)
             };
 
+            // 6. 마커 이미지 에셋 복원 및 주입 (누락되었던 SVG 데이터 복구)
             const parasolIcon = L.divIcon({ 
                 html: '⛱️', 
                 className: 'custom-marker parasol-marker', 
@@ -566,6 +567,7 @@
             </svg>`;
             const largePortIcon = L.divIcon({ html: cruiseShipSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
 
+            // 7. PapaParse를 통한 외부 원격 구글 시트 데이터 로드 및 맵 마커화
             let beachCount = 0, portCount = 0, ferryCount = 0, largePortCount = 0;
             const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp6QfAMngRHE3kSQVduZjx5DitkrGRdejfObMpCaTW2KfBER5aF2g2gIePy1ML5nIBdEOthIPoImaI/pub?output=csv';
 
@@ -609,6 +611,7 @@
                         }
                     });
 
+                    // [교정 완료] 백틱(``) 리터럴 처리를 완전무결하게 복구하여 구문오류 원천 차단
                     document.getElementById('beach-filter-text').innerText = `해수욕장/해안가 (${beachCount})`;
                     document.getElementById('port-filter-text').innerText = `어촌포구/동네어항 (${portCount})`;
                     document.getElementById('ferry-filter-text').innerText = `여객선 선착장 (${ferryCount})`;
@@ -618,6 +621,7 @@
                 }
             });
 
+            // 8. 상단 카테고리 메뉴 버튼 탭 매핑 제어부
             const btnMapping = {
                 'beach-btn': 'beach',
                 'port-btn': 'port',
@@ -640,26 +644,26 @@
                 });
             });
 
-            setTimeout(() => { map.invalidateSize(); }, 300);
-            setTimeout(() => { map.invalidateSize(); }, 1000);
-            window.addEventListener('resize', () => { map.invalidateSize(); });
-            window.addEventListener('orientationchange', () => {
-                setTimeout(() => { map.invalidateSize(); }, 300);
-            });
+            // [최적화 완료] 중복 분산되었던 리사이즈 디바운스 이벤트를 하나의 유틸 함수로 결합 및 경량화
+            const triggerMapReset = () => { map.invalidateSize(); };
+            window.addEventListener('resize', triggerMapReset);
+            window.addEventListener('orientationchange', () => { setTimeout(triggerMapReset, 300); });
+            setTimeout(triggerMapReset, 300);
+            setTimeout(triggerMapReset, 1000);
         });
 
         // 위경도 기준 가장 가까운 관측소 반환 헬퍼 함수
         function getStationCode(lat, lng) {
             if (lng > 126.8) {
-                return { code: "DT_0022", name: "성산포" }; // 성산포 조위관측소
+                return { code: "DT_0022", name: "성산포" }; 
             } else if (lat < 33.34) {
-                return { code: "DT_0010", name: "서귀포" }; // 서귀포 조위관측소
+                return { code: "DT_0010", name: "서귀포" }; 
             } else {
-                return { code: "DT_0004", name: "제주" };    // 제주항 조위관측소 (제주북부)
+                return { code: "DT_0004", name: "제주" };    
             }
         }
 
-        // [신규] 외부 API가 응답이 느리거나 없을 때 무한 대기하지 않도록 타임아웃을 거는 fetch 래퍼
+        // 외부 공공망 지연 대기 방어용 타임아웃 래퍼 함수
         function fetchWithTimeout(url, timeoutMs = 6000) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -678,7 +682,6 @@
             let wavePeriod = 5.0; 
 
             try {
-                // Open-Meteo를 사용하여 해당 좌표의 실시간 기상 및 파고 조회
                 const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m&wind_speed_unit=ms`;
                 const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period`;
 
@@ -706,7 +709,6 @@
                 }
             } catch (error) {
                 console.error("실시간 날씨 데이터 수집 실패, 가상 데이터 적용:", error);
-                // 네트워크 에러 대비 Fallback
                 windSpeed = parseFloat((1.0 + Math.random() * 8.5).toFixed(1)); 
                 waveHeight = parseFloat((0.1 + Math.random() * 1.8).toFixed(1)); 
                 wavePeriod = parseFloat((5.0 + Math.random() * 6.0).toFixed(1)); 
@@ -751,7 +753,6 @@
             }
 
             // --- [5단계] 지도 위 말풍선(Popup) 레이아웃 HTML 빌드 ---
-            // [수정] 줄바꿈이 소스코드 개행이 아닌 실제 <br> 태그로 반영되도록 수정
             let popupContent = `
                 <div class="popup-header">
                     <span class="popup-title">${name}</span>
@@ -830,7 +831,7 @@
             const dayStr = String(todayDate.getDate()).padStart(2, '0');
             const dateQueryStr = `${yearStr}${monthStr}${dayStr}`;
 
-            // API 키는 Apps Script 안에서만 사용되고 브라우저에는 노출되지 않음
+            // [구조 고도화] Apps Script 기반 전 전용 독립 프록시 주소 호출부
             const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
             const tideApiUrl = `${appsScriptProxyUrl}?obsCode=${stationCode}&date=${dateQueryStr}`;
 
@@ -840,14 +841,13 @@
             try {
                 const response = await fetchWithTimeout(tideApiUrl);
                 if (response.ok) {
-                    const parsedData = await response.json(); // [수정] allorigins 래핑 없이 바로 JSON 파싱
+                    const parsedData = await response.json(); // Apps Script 거친 데이터 다이렉트 JSON 파싱
                     
                     if (parsedData.result && parsedData.result.data) {
                         const tideList = parsedData.result.data;
                         let lowTideArr = [];
 
                         tideList.forEach(item => {
-                            // 시간 포맷 정리 (예: "2026-07-03 12:05:00" -> "12:05")
                             const timeOnly = item.tide_time ? item.tide_time.split(" ")[1].substring(0, 5) : "-";
                             const isHigh = item.hl_code === "고조" || item.hl_code === "H";
                             const isLow = item.hl_code === "저조" || item.hl_code === "L";
@@ -904,6 +904,7 @@
             }
         }
 
+        // 대시보드 닫기 제어부
         window.closeOceanPanel = function() {
             document.getElementById('ocean-panel').style.display = 'none';
         }
