@@ -696,7 +696,7 @@
         // [신규] 기상청 표준 응답구조(response.body.items.item)에서 후보 필드명들을 순서대로 시도해 값 추출
         function extractBeachApiValue(json, candidateKeys) {
             try {
-                let items = json?.response?.body?.items?.item;
+                let items = json?.response?.body?.items?.item || json?.body?.items?.item;
                 if (!items) return null;
                 if (!Array.isArray(items)) items = [items];
                 if (items.length === 0) return null;
@@ -919,7 +919,8 @@
                     console.log('[물때 API 원본 응답]', parsedData);
 
                     // [수정] 새 API는 시간대별 조위값을 연속으로 줌 -> 극대/극소점을 찾아서 고조/저조로 판정
-                    let items = parsedData?.response?.body?.items?.item;
+                    // [수정] 실제 응답에 response 래퍼가 없는 것으로 확인됨 - 두 형태 다 시도
+                    let items = parsedData?.body?.items?.item || parsedData?.response?.body?.items?.item;
                     if (items && !Array.isArray(items)) items = [items];
 
                     if (items && items.length > 2) {
