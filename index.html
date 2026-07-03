@@ -59,8 +59,7 @@
         /* 활성화 테마 스타일 */
         #beach-btn.active { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
         #port-btn.active { background: #f0fdf4; color: #15803d; border-color: #86efac; }
-        #ferry-btn.active { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
-        #largePort-btn.active { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+        #shipPort-btn.active { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
 
         /* 비활성화 스타일 */
         .filter-bar-item.inactive {
@@ -395,23 +394,14 @@
             </span>
             <span id="port-filter-text">어촌포구/동네어항 (..)</span>
         </div>
-        <div class="filter-bar-item active" id="ferry-btn">
+        <div class="filter-bar-item active" id="shipPort-btn">
             <span style="display: inline-flex; align-items: center;">
                 <svg viewBox="0 0 24 24" width="14" height="14">
-                    <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
-                    <path d="M2 15l2 4h16l2-4H2z" fill="#ea580c"/>
+                    <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#94a3b8"/>
+                    <path d="M2 15l2 4h16l2-4H2z" fill="#0f172a"/>
                 </svg>
             </span>
-            <span id="ferry-filter-text">여객선 선착장 (..)</span>
-        </div>
-        <div class="filter-bar-item active" id="largePort-btn">
-            <span style="display: inline-flex; align-items: center;">
-                <svg viewBox="0 0 24 24" width="14" height="14">
-                    <path d="M3 8h17v5H3V8z" fill="#94a3b8" />
-                    <path d="M1 14h22l-2 6H3l-2-6z" fill="#0f172a" />
-                </svg>
-            </span>
-            <span id="largePort-filter-text">대형/크루즈항 (..)</span>
+            <span id="shipPort-filter-text">여객선/대형·크루즈항 (..)</span>
         </div>
     </div>
 
@@ -542,6 +532,15 @@
             </svg>`;
             const portIcon = L.divIcon({ html: blueSailboatSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
 
+            // [신규] noport(기능 상실 포구) 전용 - 배 대신 스노클링 마스크 아이콘
+            const noPortIcon = L.divIcon({
+                html: '🤿',
+                className: 'custom-marker parasol-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -10]
+            });
+
             const orangeFerrySvg = `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
                 <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
@@ -587,6 +586,11 @@
                             marker = L.marker([latVal, lngVal], { icon: portIcon }).addTo(layers.port);
                             portCount++;
                         }
+                        else if (typeVal === 'noport') {
+                            // [신규] 기능 상실 포구 - 어촌포구 필터/카운트에는 함께 묶이지만 아이콘만 스노클링 마스크
+                            marker = L.marker([latVal, lngVal], { icon: noPortIcon }).addTo(layers.port);
+                            portCount++;
+                        }
                         else if (typeVal === 'ferry') {
                             marker = L.marker([latVal, lngVal], { icon: ferryIcon }).addTo(layers.ferry);
                             ferryCount++;
@@ -605,31 +609,29 @@
 
                     document.getElementById('beach-filter-text').innerText = `해수욕장/해안가 (${beachCount})`;
                     document.getElementById('port-filter-text').innerText = `어촌포구/동네어항 (${portCount})`;
-                    document.getElementById('ferry-filter-text').innerText = `여객선 선착장 (${ferryCount})`;
-                    document.getElementById('largePort-filter-text').innerText = `대형/크루즈항 (${largePortCount})`;
+                    document.getElementById('shipPort-filter-text').innerText = `여객선/대형·크루즈항 (${ferryCount + largePortCount})`;
 
                     map.invalidateSize();
                 }
             });
 
             const btnMapping = {
-                'beach-btn': 'beach',
-                'port-btn': 'port',
-                'ferry-btn': 'ferry',
-                'largePort-btn': 'largePort'
+                'beach-btn': ['beach'],
+                'port-btn': ['port'],
+                'shipPort-btn': ['ferry', 'largePort']
             };
             Object.keys(btnMapping).forEach(btnId => {
                 const btn = document.getElementById(btnId);
                 btn.addEventListener('click', () => {
-                    const layerKey = btnMapping[btnId];
+                    const layerKeys = btnMapping[btnId];
                     if (btn.classList.contains('active')) {
                         btn.classList.remove('active');
                         btn.classList.add('inactive');
-                        map.removeLayer(layers[layerKey]);
+                        layerKeys.forEach(key => map.removeLayer(layers[key]));
                     } else {
                         btn.classList.remove('inactive');
                         btn.classList.add('active');
-                        map.addLayer(layers[layerKey]);
+                        layerKeys.forEach(key => map.addLayer(layers[key]));
                     }
                 });
             });
@@ -796,6 +798,7 @@
             let displayCategory = "기타 어항";
             if (type === "beach") displayCategory = "해수욕장 및 해안가";
             else if (type === "port") displayCategory = "어촌포구/어항";
+            else if (type === "noport") displayCategory = "기능 상실 포구 (스노클링 포인트)";
             else if (type === "ferry") displayCategory = "여객/도항선 선착장";
             else if (type === "large") displayCategory = "대형무역/크루즈항";
             
