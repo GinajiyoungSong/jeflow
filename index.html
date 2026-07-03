@@ -659,6 +659,13 @@
             }
         }
 
+        // [신규] 외부 API가 응답이 느리거나 없을 때 무한 대기하지 않도록 타임아웃을 거는 fetch 래퍼
+        function fetchWithTimeout(url, timeoutMs = 6000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+        }
+
         // 실시간 기상/조위 API 통신용 비동기(async) 제어 함수
         async function handleMarkerClick(marker, name, type, desc, info, lat, lng) {
             
@@ -676,8 +683,8 @@
                 const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period`;
 
                 const [weatherRes, marineRes] = await Promise.all([
-                    fetch(weatherUrl),
-                    fetch(marineUrl)
+                    fetchWithTimeout(weatherUrl),
+                    fetchWithTimeout(marineUrl)
                 ]);
 
                 if (weatherRes.ok) {
@@ -831,7 +838,7 @@
             let lowTideTime = "-";
 
             try {
-                const response = await fetch(tideApiUrl);
+                const response = await fetchWithTimeout(tideApiUrl);
                 if (response.ok) {
                     const parsedData = await response.json(); // [수정] allorigins 래핑 없이 바로 JSON 파싱
                     
