@@ -6,7 +6,7 @@
     <title>제주 해양지도 플랫폼 - 해볼루션</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* 구글 사이트 내부 iframe 및 반응형 샌드박스 완벽 호환 */
+        /* 사이트 iframe 및 반응형 샌드박스 완벽 호환 */
         html, body {
             margin: 0;
             padding: 0;
@@ -109,7 +109,7 @@
         .mode-btn {
             flex: 1 1 0;
             min-width: 90px;
-            aspect-ratio: 1 / 1;
+            aspect-ratio: 1.6 / 1;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -119,13 +119,13 @@
             line-height: 1.25;
             cursor: pointer;
             transition: all 0.2s;
-            color: #94a3b8;
-            background: rgba(255,255,255,0.05);
+            color: #0f172a; 
+            background:  #38bdf8;   /* 기본 상태: 하늘색 */
             border: 1px solid rgba(255,255,255,0.08);
         }
         .mode-btn.active {
-            background: #38bdf8;
-            color: #0f172a;
+        background: #ffffff;   /* 클릭(선택)하면: 화이트 */
+        color: #0f172a;
         }
         /* 준비중 모드일 때 지도 위에 덮는 안내 오버레이 */
         .mode-comingsoon-overlay {
