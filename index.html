@@ -70,6 +70,30 @@
         }
 
         /* 지도 스타일 변경 배너 */
+        /* [신규] 최상단 사이트 제목/부제목 헤더 */
+        .site-header {
+            flex: 0 0 auto;
+            background: #ffffff;
+            text-align: center;
+            padding: 16px 12px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .site-title {
+            margin: 0 0 6px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .site-subtitle {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        @media (min-width: 900px) {
+            .site-title { font-size: 30px; }
+            .site-subtitle { font-size: 16px; }
+        }
+
         /* [신규] 최상단 액티비티 모드 배너 - 스쿠버/프리다이빙/스노클링/해수욕장·포구 전환 */
         .mode-banner {
             flex: 0 0 auto;
@@ -182,28 +206,36 @@
         }
 
         /* 우측 실시간 정보 대시보드 패널 */
+        /* [수정] 지도 위에 떠있던 패널을 지도 밖 하단 고정 영역으로 변경 */
         #ocean-panel {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 330px;
-            max-width: calc(100% - 24px);
-            background: rgba(15, 23, 42, 0.92);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            flex: 0 0 auto;
+            width: 100%;
+            max-height: 42vh;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.97);
             color: #f8fafc;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-            z-index: 1000;
-            padding: 20px;
-            display: none;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            animation: slideIn 0.2s ease-out;
+            z-index: 1001;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.25);
         }
+        /* 마커 선택 전 기본 안내 문구 */
+        #panel-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px 8px;
+            color: #94a3b8;
+        }
+        #panel-placeholder .ph-icon { font-size: 24px; margin-bottom: 6px; }
+        #panel-placeholder .ph-text { font-size: 12px; line-height: 1.5; }
         @keyframes slideIn {
-            from { transform: translateX(15px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from { transform: translateY(15px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
+        #panel-content { animation: slideIn 0.2s ease-out; }
         .panel-close {
             float: right;
             cursor: pointer;
@@ -377,30 +409,11 @@
         }
         .popup-guideline b { display: block; margin-bottom: 3px; font-size: 10.5px; }
 
-        /* 모바일 스크린 바텀 시트 최적화 반응형 디자인 */
+        /* 모바일 스크린 폰트/여백 최적화 반응형 디자인 */
         @media (max-width: 600px) {
             #ocean-panel {
-                top: auto !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                max-height: 48vh !important;
-                overflow-y: auto !important;
-                border-radius: 20px 20px 0 0 !important;
-                padding: 14px 16px !important;
-                box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25) !important;
-                border-left: none !important;
-                border-right: none !important;
-                border-bottom: none !important;
-                border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
-                animation: slideUp 0.25s ease-out !important;
-            }
-
-            @keyframes slideUp {
-                from { transform: translateY(100%); }
-                to { transform: translateY(0); }
+                max-height: 45vh !important;
+                padding: 12px 14px !important;
             }
 
             .panel-title { font-size: 15px !important; }
@@ -428,9 +441,28 @@
             .mode-btn { font-size: 13px !important; min-width: 70px !important; }
             .layer-btn { font-size: 10.5px !important; padding: 6px 14px !important; }
         }
+
+        /* [신규] 넓은 화면(데스크톱/PC)에서는 필터바·배너 글자와 아이콘을 더 크게 표시 */
+        @media (min-width: 900px) {
+            .filter-container { padding: 14px 20px; gap: 12px; }
+            .filter-bar-item { font-size: 15px; padding: 10px 18px; gap: 9px; border-radius: 24px; }
+            .filter-bar-item svg { width: 20px !important; height: 20px !important; }
+            .filter-bar-item span:first-child { font-size: 18px; }
+
+            .layer-banner { padding: 12px 20px; gap: 12px; }
+            .layer-btn { font-size: 15px; padding: 10px 22px; }
+
+            .mode-btn { font-size: 20px; }
+        }
     </style>
 </head>
 <body>
+
+    <!-- [신규] 최상단 사이트 제목/부제목 -->
+    <div class="site-header">
+        <h1 class="site-title">제주해양지도 안전 신호등체계</h1>
+        <p class="site-subtitle">🤿 다이빙/스노클링 가기전에 꼭 신호등(🟢/🟡/🔴) 확인하고 가세요</p>
+    </div>
 
     <!-- [신규] 최상단 액티비티 모드 배너 -->
     <div class="mode-banner">
@@ -496,14 +528,23 @@
             <div class="cs-title" id="comingsoon-title">준비 중입니다</div>
             <div class="cs-desc">해당 카테고리 데이터는 곧 추가될 예정이에요</div>
         </div>
+    </div>
 
-        <div id="ocean-panel">
-            <span class="panel-close" onclick="closeOceanPanel()">×</span>
-            <div class="panel-title" id="p-name">-</div>
-            <div class="panel-subtitle" id="p-category">-</div>
-            <div class="panel-desc" id="p-desc">-</div>
+    <!-- [수정] 팝업과 겹치던 패널을 지도 밖 하단 고정 영역으로 완전히 분리 -->
+    <div id="ocean-panel">
+        <!-- 마커를 선택하기 전 기본으로 보이는 안내 문구 -->
+        <div id="panel-placeholder">
+            <div class="ph-icon">📍</div>
+            <div class="ph-text">이 곳에서 수온·풍속·파고 등 바다 입수가 안전한지 안내합니다.<br>지도에서 위치를 눌러보세요.</div>
+        </div>
 
-            <div class="info-card-section">
+        <!-- 마커 선택 후 실제 정보가 표시되는 영역 -->
+        <div id="panel-content" style="display:none;">
+            <span class="panel-close" onclick="resetOceanPanel()">×</span>
+
+            <div class="panel-subtitle" id="p-name-mini" style="margin-bottom:10px;">📍 -</div>
+
+            <div class="info-card-section" style="border-top:none; padding-top:0;">
                 <div class="section-header">☀️ 실시간 바다 기상 및 파랑 정보</div>
                 <div class="weather-grid">
                     <div class="weather-card">
@@ -889,8 +930,8 @@
             }
 
             function panelCloseIfOpen() {
-                const panel = document.getElementById('ocean-panel');
-                if (panel) panel.style.display = 'none';
+                // [수정] 패널은 이제 항상 보이는 하단 고정 영역이므로, 모드 전환 시엔 안내 문구로만 리셋
+                window.resetOceanPanel();
             }
 
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -978,7 +1019,13 @@
             // [신규] 공식 해수욕장 API 사용 가능 여부 (beach 타입이면서 beach_num이 채워져 있을 때만)
             const useBeachApi = (type === 'beach' && beachNum);
 
+            // [수정] 팝업(지도 위)에는 로딩 문구, 하단 패널 미니 라벨도 로딩 표시
             marker.bindPopup(`<div style="text-align:center; padding: 12px; font-size:12px; color:#4b5563;">⏳ ${isRestrictedZone ? '항구 정보' : '실시간 해양 기상 및 물때'} 로딩 중...</div>`).openPopup();
+
+            document.getElementById('panel-placeholder').style.display = 'none';
+            const panelContentEl = document.getElementById('panel-content');
+            panelContentEl.style.display = 'block';
+            document.getElementById('p-name-mini').innerText = `📍 ${name} - 로딩 중...`;
 
             let windSpeed = 3.0; 
             let waveHeight = 0.5; 
@@ -1072,6 +1119,7 @@
                 `;
             }
 
+            // [수정] 팝업(지도 위 말풍선)에 이름+신호등+설명+가이드라인을 다시 조립
             let popupContent = `
                 <div class="popup-header">
                     <span class="popup-title">${name}</span>
@@ -1090,7 +1138,6 @@
                 popupContent += `<span class="popup-info-tag">ℹ️ ${info}</span><br>`;
             }
             if (isRestrictedZone) {
-                // [신규] 스노클링 가이드 대신 법적 입수금지 안내로 대체
                 popupContent += `
                     <div class="popup-guideline ${signalClass}">
                         <b>⚓ 선박 운항 구역 안내</b>
@@ -1107,23 +1154,10 @@
                     ${swellBannerHtml}
                 `;
             }
-
             marker.setPopupContent(popupContent);
 
-            const panel = document.getElementById('ocean-panel');
-            panel.style.display = 'block';
-
-            document.getElementById('p-name').innerText = name;
-            
-            let displayCategory = "기타 어항";
-            if (type === "beach") displayCategory = "해수욕장 및 해안가";
-            else if (type === "port") displayCategory = "어촌포구/어항";
-            else if (type === "noport") displayCategory = "기능 상실 포구 (스노클링 포인트)";
-            else if (type === "ferry") displayCategory = "여객/도항선 선착장";
-            else if (type === "large") displayCategory = "대형무역/크루즈항";
-            
-            document.getElementById('p-category').innerText = displayCategory;
-            document.getElementById('p-desc').innerText = desc || "맑고 아름다운 제주 해안가 인근 주요 지점입니다.";
+            // [수정] 하단 패널은 위치 미니 라벨만 갱신 (상세 설명은 팝업이 담당)
+            document.getElementById('p-name-mini').innerText = `📍 ${name}`;
 
             document.getElementById('w-wind').innerText = isRestrictedZone ? '-' : `${windSpeed} m/s`;
             document.getElementById('w-wave').innerText = isRestrictedZone ? '-' : `${waveHeight} m`;
@@ -1272,8 +1306,9 @@
             }
         }
 
-        window.closeOceanPanel = function() {
-            document.getElementById('ocean-panel').style.display = 'none';
+        window.resetOceanPanel = function() {
+            document.getElementById('panel-content').style.display = 'none';
+            document.getElementById('panel-placeholder').style.display = 'flex';
         }
     
     </script>
