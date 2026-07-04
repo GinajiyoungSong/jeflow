@@ -442,9 +442,9 @@
 
     <!-- [신규] 스노클링 모드 전용 필터바 - 기본은 숨김, 스노클링 모드 선택 시에만 표시 -->
     <div class="filter-container" id="snorkel-filter-container" style="display:none;">
-        <div class="filter-bar-item active" id="snorkel-noport-btn">
+        <div class="filter-bar-item active" id="snorkel-noportSpot-btn">
             <span>🤿</span>
-            <span id="snorkel-noport-filter-text">기능상실 포구 (..)</span>
+            <span id="snorkel-noportSpot-filter-text">스노클링 핫플레이스 (..)</span>
         </div>
         <div class="filter-bar-item active" id="snorkel-beach-btn">
             <span>⛱️</span>
@@ -453,10 +453,6 @@
         <div class="filter-bar-item active" id="snorkel-port-btn">
             <span>⚓</span>
             <span id="snorkel-port-filter-text">포구 (..)</span>
-        </div>
-        <div class="filter-bar-item active" id="snorkel-spot-btn">
-            <span>🤿</span>
-            <span id="snorkel-spot-filter-text">자연 암반/용천수 (..)</span>
         </div>
     </div>
 
@@ -634,15 +630,6 @@
                 popupAnchor: [0, -10]
             });
 
-            // [신규] 스노클링 모드 전용 - 자연 암반/용천수 스팟(spot) 아이콘
-            const spotIcon = L.divIcon({
-                html: '🤿',
-                className: 'custom-marker parasol-marker',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -10]
-            });
-
             const orangeFerrySvg = `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
                 <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
@@ -779,7 +766,7 @@
                                 marker = L.marker([latVal, lngVal], { icon: portIcon }).addTo(layers.snorkelPort);
                                 snorkelPortCount++;
                             } else if (typeVal === 'spot') {
-                                marker = L.marker([latVal, lngVal], { icon: spotIcon }).addTo(layers.snorkelSpot);
+                                marker = L.marker([latVal, lngVal], { icon: noPortIcon }).addTo(layers.snorkelSpot);
                                 snorkelSpotCount++;
                             }
 
@@ -790,10 +777,9 @@
                             }
                         });
 
-                        document.getElementById('snorkel-noport-filter-text').innerText = `기능상실 포구 (${snorkelNoportCount})`;
+                        document.getElementById('snorkel-noportSpot-filter-text').innerText = `스노클링 핫플레이스 (${snorkelNoportCount + snorkelSpotCount})`;
                         document.getElementById('snorkel-beach-filter-text').innerText = `해변 (${snorkelBeachCount})`;
                         document.getElementById('snorkel-port-filter-text').innerText = `포구 (${snorkelPortCount})`;
-                        document.getElementById('snorkel-spot-filter-text').innerText = `자연 암반/용천수 (${snorkelSpotCount})`;
                     }
                 });
             } else {
@@ -825,10 +811,9 @@
 
             // [신규] 스노클링 모드 전용 필터바 토글
             const snorkelBtnMapping = {
-                'snorkel-noport-btn': ['snorkelNoport'],
+                'snorkel-noportSpot-btn': ['snorkelNoport', 'snorkelSpot'],
                 'snorkel-beach-btn': ['snorkelBeach'],
-                'snorkel-port-btn': ['snorkelPort'],
-                'snorkel-spot-btn': ['snorkelSpot']
+                'snorkel-port-btn': ['snorkelPort']
             };
             Object.keys(snorkelBtnMapping).forEach(btnId => {
                 const btn = document.getElementById(btnId);
@@ -884,7 +869,7 @@
                     });
                 } else if (mode === 'snorkeling') {
                     snorkelModeFilterBar.style.display = 'flex';
-                    document.querySelectorAll('#snorkel-noport-btn, #snorkel-beach-btn, #snorkel-port-btn, #snorkel-spot-btn').forEach(btn => {
+                    document.querySelectorAll('#snorkel-noportSpot-btn, #snorkel-beach-btn, #snorkel-port-btn').forEach(btn => {
                         if (btn.classList.contains('active')) {
                             (snorkelBtnMapping[btn.id] || []).forEach(key => map.addLayer(layers[key]));
                         }
