@@ -1,0 +1,2336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>제주 해양지도 플랫폼 - 해볼루션</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ⚠️ 삭제 금지: 구글 사이트 전용 코드 아님 - 사이트 전체 레이아웃(제목/배너/필터바/지도/하단패널을
+           세로로 쌓는 flex 구조)의 핵심 기반 코드. GitHub Pages 단독 사용 시에도 반드시 필요함 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-y: auto;   /* [수정] hidden -> auto: 내용이 화면보다 커져도 잘리지 않고 페이지 전체가 스크롤됨 */
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background-color: #d1eae8;
+        }
+
+        /* 횡스크롤 지원 상단 필터바 */
+        .filter-container {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 8px;
+            background: #ffffff;
+            padding: 10px 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid #e5e7eb;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            z-index: 1001;
+        }
+        .filter-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 개별 탭 버튼 스타일 */
+        .filter-bar-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #4b5563;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        /* 활성화 테마 스타일 */
+        #beach-btn.active { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+        #port-btn.active { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+        #shipPort-btn.active { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+
+        /* 비활성화 스타일 */
+        .filter-bar-item.inactive {
+            opacity: 0.4;
+            background: #f3f4f6;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+
+        /* 지도 스타일 변경 배너 */
+        /* [신규] 최상단 사이트 제목/부제목 헤더 */
+        .site-header {
+            flex: 0 0 auto;
+            background: #ffffff;
+            text-align: center;
+            padding: 16px 12px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .site-title {
+            margin: 0 0 6px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .site-subtitle {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        @media (min-width: 900px) {
+            .site-title { font-size: 30px; }
+            .site-subtitle { font-size: 16px; }
+        }
+
+        /* [신규] 최상단 액티비티 모드 배너 - 스쿠버/프리다이빙/스노클링/해수욕장·포구 전환 */
+        .mode-banner {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 0;
+            background: #0f172a;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            z-index: 1002;
+        }
+        .mode-banner::-webkit-scrollbar { display: none; }
+        .mode-btn {
+            flex: 1 1 0;
+            min-width: 90px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.25;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #0f172a;
+            background: #38bdf8;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .mode-btn.active {
+            background: #ffffff;
+            color: #0f172a;
+        }
+        /* 준비중 모드일 때 지도 위에 덮는 안내 오버레이 */
+        .mode-comingsoon-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.88);
+            color: #f8fafc;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 1500;
+            padding: 24px;
+        }
+        .mode-comingsoon-overlay .cs-emoji { font-size: 40px; margin-bottom: 12px; }
+        .mode-comingsoon-overlay .cs-title { font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+        .mode-comingsoon-overlay .cs-desc { font-size: 12px; color: #cbd5e1; }
+
+        .layer-banner {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 1001;
+        }
+        .layer-btn {
+            font-size: 12px;
+            font-weight: bold;
+            padding: 7px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #4b5563;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+        .layer-btn.active {
+            background: #1e3a8a;
+            color: #ffffff;
+            border-color: #1e3a8a;
+        }
+
+        /* 지도 컨테이너 */
+        #map-wrapper {
+            position: relative;
+            flex: 0 0 auto;   /* [수정] 1 1 auto -> 0 0 auto: 패널 크기에 따라 압박받지 않고 항상 고정 크기 유지 */
+            width: 100%;
+            height: 58vh;     /* [수정] 100% -> 고정 뷰포트 비율 (아래 모바일 미디어쿼리에서 별도 조정) */
+            min-height: 320px;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            background-color: #d1eae8;
+        }
+
+        /* [신규] 지도 스크롤줌 안내 배지 (클릭 전까지 스크롤은 페이지 이동, 클릭 후에만 지도 확대) */
+        .scroll-hint {
+            position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+            background: rgba(11,36,56,0.85); color: #F7F4EC;
+            font-size: 12px; padding: 7px 14px; border-radius: 999px;
+            pointer-events: none; z-index: 500;
+            opacity: 1; transition: opacity .4s ease;
+            white-space: nowrap;
+        }
+        .scroll-hint.hide { opacity: 0; }
+
+        /* [신규] 보정 패널 (개발자용) */
+        #cal-panel {
+            position: absolute; top: 14px; right: 14px; z-index: 800;
+            background: rgba(11,36,56,0.95); border: 1px solid rgba(247,244,236,0.2);
+            border-radius: 10px; padding: 14px; width: 220px;
+            color: #F7F4EC; font-size: 12px;
+        }
+        #cal-panel .cal-title { font-weight: 700; margin-bottom: 10px; }
+        #cal-panel .cal-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+        #cal-panel select { font-size: 12px; padding: 3px 6px; border-radius: 4px; }
+        #cal-panel button {
+            background: #2FA8A0; border: none; color: #071726; font-weight: 700;
+            padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+        }
+        #cal-panel .cal-dpad { text-align: center; margin-bottom: 10px; }
+        #cal-panel .cal-dpad button { width: 34px; margin: 2px; }
+        #cal-panel .cal-reset-btn { width: 100%; background: #E2543F; color: #F7F4EC; margin-bottom: 10px; }
+        #cal-panel .cal-hint { font-size: 10.5px; color: #D9CFB0; margin-bottom: 8px; line-height: 1.4; }
+        #cal-panel pre {
+            background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;
+            font-size: 9.5px; white-space: pre-wrap; word-break: break-all; margin-bottom: 8px;
+        }
+        .cal-ref-marker {
+            width: 22px; height: 22px; border-radius: 6px; background: #fff;
+            border: 2px solid #E2543F; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; position: relative;
+        }
+        .cal-ref-label {
+            position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+            font-size: 9px; white-space: nowrap; background: rgba(0,0,0,0.8); color: #fff;
+            padding: 1px 5px; border-radius: 3px;
+        }
+
+        /* 마커 디자인 */
+        .custom-marker {
+            background: none !important;
+            border: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease-in-out;
+        }
+        .custom-marker:hover {
+            transform: scale(1.25) translateY(-3px);
+        }
+        .parasol-marker {
+            font-size: 24px;
+            filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.25));
+        }
+
+        /* 우측 실시간 정보 대시보드 패널 */
+        /* [수정] 지도 위에 떠있던 패널을 지도 밖 하단 고정 영역으로 변경 */
+        #ocean-panel {
+            flex: 0 0 auto;
+            width: 100%;
+            max-height: 42vh;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.97);
+            color: #f8fafc;
+            z-index: 1001;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.25);
+        }
+        /* 마커 선택 전 기본 안내 문구 */
+        #panel-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px 8px;
+            color: #94a3b8;
+        }
+        #panel-placeholder .ph-icon { font-size: 24px; margin-bottom: 6px; }
+        #panel-placeholder .ph-text { font-size: 12px; line-height: 1.5; }
+        @keyframes slideIn {
+            from { transform: translateY(15px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        #panel-content { animation: slideIn 0.2s ease-out; }
+        .panel-close {
+            float: right;
+            cursor: pointer;
+            font-size: 22px;
+            color: #94a3b8;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        .panel-close:hover { color: #f8fafc; }
+        
+        .panel-title { font-size: 18px; font-weight: bold; color: #38bdf8; margin-bottom: 2px; }
+        .panel-subtitle { font-size: 10px; color: #4ade80; font-weight: bold; background: rgba(22, 163, 74, 0.2); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 12px; }
+        .panel-desc { font-size: 11px; color: #cbd5e1; line-height: 1.4; margin-bottom: 14px; }
+
+        /* 실시간 기상 구역 */
+        .info-card-section {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 12px;
+            margin-bottom: 12px;
+        }
+        .section-header { font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 8px; }
+        .weather-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+        .weather-card { background: rgba(255, 255, 255, 0.05); padding: 8px 4px; border-radius: 8px; text-align: center; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .weather-label { font-size: 9px; color: #94a3b8; }
+        .weather-val { font-size: 12px; font-weight: bold; color: #f8fafc; margin-top: 2px; }
+
+        .marine-evaluation {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+        .eval-ok { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
+        .eval-caution { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+        .eval-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
+
+        /* 오늘 물때 시간표 */
+        .tide-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; }
+        .tide-table th { background: rgba(255, 255, 255, 0.1); padding: 6px; color: #f8fafc; font-weight: bold; }
+        .tide-table td { padding: 8px 4px; color: #cbd5e1; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .tide-high { color: #fca5a5 !important; font-weight: bold; }
+        .tide-low { color: #93c5fd !important; font-weight: bold; }
+        
+        .tide-tip-box {
+            margin-top: 8px;
+            background: rgba(30, 78, 216, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(30, 78, 216, 0.3);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        /* 지도 위 말풍선 팝업 스타일링 */
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            padding: 4px;
+            max-width: 290px;
+        }
+        .leaflet-popup-content {
+            font-size: 12px;
+            line-height: 1.45;
+            margin: 12px 14px;
+            color: #1e293b;
+        }
+
+        .popup-header {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+            margin-bottom: 6px;
+        }
+        .popup-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-right: auto;
+        }
+        .popup-status-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .popup-traffic-light {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #1f2937;
+            padding: 4px 5px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .popup-traffic-light .tl-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #4b5563;
+            opacity: 0.4;
+            transition: all 0.2s;
+        }
+        .popup-traffic-light .tl-dot.tl-red.on {
+            background: #ef4444;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(239, 68, 68, 0.85);
+        }
+        .popup-traffic-light .tl-dot.tl-yellow.on {
+            background: #facc15;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(250, 204, 21, 0.85);
+        }
+        .popup-traffic-light .tl-dot.tl-green.on {
+            background: #22c55e;
+            opacity: 1;
+            box-shadow: 0 0 6px 1px rgba(34, 197, 94, 0.85);
+        }
+        .popup-desc {
+            font-size: 11px;
+            color: #4b5563;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .popup-info-tag {
+            display: inline-block;
+            background-color: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .popup-swell-banner {
+            background-color: #fee2e2;
+            color: #ef4444;
+            border: 1px solid #fca5a5;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 8px;
+            line-height: 1.35;
+        }
+        .popup-signal-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 9px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .signal-ok { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .signal-caution { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .signal-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        .popup-guideline {
+            margin-top: 4px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 10.5px;
+            line-height: 1.5;
+        }
+        .popup-guideline b { display: block; margin-bottom: 3px; font-size: 10.5px; }
+
+        /* [신규] 팝업 내 CCTV/드론영상 버튼 및 미디어 박스 */
+        .popup-media-row { display: flex; gap: 6px; margin-top: 8px; }
+        .popup-media-btn {
+            flex: 1; font-size: 10.5px; font-weight: 700; font-family: inherit;
+            background: #0B2438; color: #F7F4EC; border: none;
+            padding: 7px 6px; border-radius: 6px; cursor: pointer;
+        }
+        .popup-media-btn:hover { background: #14344f; }
+        .popup-media-loading, .popup-media-empty {
+            font-size: 10.5px; color: #8A8880; text-align: center;
+            padding: 10px 6px; margin-top: 6px;
+        }
+        .popup-media-box { margin-top: 8px; }
+        .popup-media-badge {
+            display: inline-block; font-size: 9.5px; font-weight: 700;
+            background: rgba(47,168,160,0.14); color: #0F6E56;
+            padding: 2px 8px; border-radius: 999px; margin-bottom: 5px;
+        }
+        .popup-media-box video, .popup-media-box iframe {
+            width: 100%; aspect-ratio: 16/9; border: none; border-radius: 6px;
+            display: block; background: #000;
+        }
+        .popup-media-caption { font-size: 10px; color: #5F5E5A; margin-top: 4px; line-height: 1.4; }
+
+        /* 모바일 스크린 폰트/여백 최적화 반응형 디자인 */
+        @media (max-width: 600px) {
+            #map-wrapper {
+                height: 42vh !important;
+                min-height: 260px !important;
+            }
+            #ocean-panel {
+                max-height: 45vh !important;
+                padding: 12px 14px !important;
+            }
+
+            .panel-title { font-size: 15px !important; }
+            .panel-subtitle { font-size: 9px !important; margin-bottom: 6px !important; }
+            .panel-desc { font-size: 10px !important; line-height: 1.35 !important; margin-bottom: 10px !important; }
+
+            .info-card-section { padding-top: 8px !important; margin-bottom: 8px !important; }
+            .section-header { font-size: 10px !important; margin-bottom: 5px !important; }
+            .weather-grid { gap: 4px !important; }
+            .weather-card { padding: 6px 4px !important; }
+            .weather-label { font-size: 8px !important; }
+            .weather-val { font-size: 11px !important; }
+
+            .marine-evaluation { padding: 8px !important; font-size: 10.5px !important; }
+
+            .tide-table { font-size: 10px !important; }
+            .tide-table th { padding: 4px !important; }
+            .tide-table td { padding: 5px 2px !important; }
+            
+            .tide-tip-box { padding: 6px 10px !important; font-size: 9.5px !important; margin-top: 6px !important; line-height: 1.35 !important; }
+            .panel-close { font-size: 20px !important; padding: 4px !important; }
+
+            .layer-banner { padding: 6px 10px !important; gap: 6px !important; }
+
+            .mode-btn { font-size: 13px !important; min-width: 70px !important; }
+            .layer-btn { font-size: 10.5px !important; padding: 6px 14px !important; }
+        }
+
+        /* [신규] 넓은 화면(데스크톱/PC)에서는 필터바·배너 글자와 아이콘을 더 크게 표시 */
+        @media (min-width: 900px) {
+            .filter-container { padding: 14px 20px; gap: 12px; }
+            .filter-bar-item { font-size: 15px; padding: 10px 18px; gap: 9px; border-radius: 24px; }
+            .filter-bar-item svg { width: 20px !important; height: 20px !important; }
+            .filter-bar-item span:first-child { font-size: 18px; }
+
+            .layer-banner { padding: 12px 20px; gap: 12px; }
+            .layer-btn { font-size: 15px; padding: 10px 22px; }
+
+            .mode-btn { font-size: 20px; }
+        }
+
+        /* ===== [신규] 업체 분포 클러스터 지도 섹션 (파트너 디렉토리 연동) ===== */
+        .partner-section-head {
+            padding: 28px 5vw 14px;
+            background: #0EA5E9;
+            color: #F7F4EC;
+        }
+        .partner-section-head h2 {
+            font-family: 'Black Han Sans', sans-serif;
+            font-size: clamp(20px, 4vw, 26px);
+        }
+        .partner-section-head p {
+            font-size: 12.5px; color: rgba(255,255,255,0.88); margin-top: 6px;
+        }
+        .partner-map-shell {
+            position: relative;
+            height: 60vh;
+            min-height: 380px;
+            background: #0B2438;
+        }
+        #cluster-map { position: absolute; inset: 0; }
+        .p-legend {
+            position: absolute; top: 14px; left: 14px; z-index: 900;
+            background: rgba(7,23,38,0.92); border: 1px solid rgba(247,244,236,0.15);
+            border-radius: 10px; padding: 12px 14px; color: #F7F4EC;
+            font-size: 11.5px; max-width: 170px;
+        }
+        .p-legend h4 { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: #D9CFB0; letter-spacing: 0.5px; }
+        .p-legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .p-legend-row:last-child { margin-bottom: 0; }
+        .p-legend-dot { border-radius: 50%; flex-shrink: 0; }
+        .p-legend-row .pl1 { width: 20px; height: 20px; background: #E2543F; }
+        .p-legend-row .pl2 { width: 15px; height: 15px; background: #EF9F27; }
+        .p-legend-row .pl3 { width: 9px; height: 9px; background: #2FA8A0; }
+        .p-legend-total {
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(247,244,236,0.15);
+            font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #D9CFB0;
+        }
+        .p-legend-total b { color: #7ED1C8; font-size: 14px; }
+        .p-cluster-icon { display: flex; align-items: center; justify-content: center; }
+        .p-cluster-circle {
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            border: 2px solid rgba(255,255,255,0.55);
+            font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #071726;
+            cursor: pointer; transition: transform .12s ease;
+        }
+        .p-cluster-circle:hover { transform: scale(1.08); }
+        .p-tier-large { background: #E2543F; }
+        .p-tier-medium { background: #EF9F27; }
+        .p-tier-small { background: #2FA8A0; }
+        .p-cluster-label {
+            position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; white-space: nowrap; color: #071726;
+            background: rgba(247,244,236,0.92); padding: 1px 6px; border-radius: 4px;
+            font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .12s ease;
+        }
+        .p-cluster-icon:hover .p-cluster-label { opacity: 1; }
+
+        .p-backdrop {
+            position: fixed; inset: 0; background: rgba(7,23,38,0.55);
+            z-index: 1000; opacity: 0; pointer-events: none; transition: opacity .25s ease;
+        }
+        .p-backdrop.show { opacity: 1; pointer-events: auto; }
+        .p-sheet {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100;
+            background: #F7F4EC; color: #1C1F22;
+            border-radius: 18px 18px 0 0;
+            max-height: 72vh;
+            transform: translateY(100%);
+            transition: transform .28s cubic-bezier(.32,.72,0,1);
+            display: flex; flex-direction: column;
+            box-shadow: 0 -18px 40px rgba(0,0,0,0.35);
+        }
+        .p-sheet.open { transform: translateY(0); }
+        .p-sheet-handle {
+            width: 40px; height: 4px; background: rgba(28,31,34,0.25); border-radius: 99px;
+            margin: 10px auto 4px; cursor: grab;
+        }
+        .p-sheet-header {
+            padding: 10px 22px 14px; border-bottom: 1px dashed rgba(28,31,34,0.18);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .p-sheet-header h3 { font-family: 'Black Han Sans', sans-serif; font-size: 20px; }
+        .p-sheet-header .p-sub { font-size: 12px; color: #5F5E5A; margin-top: 2px; }
+        .p-sheet-close {
+            width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(28,31,34,0.2);
+            background: transparent; font-size: 16px; cursor: pointer; color: #5F5E5A;
+            flex-shrink: 0;
+        }
+        .p-sheet-list { overflow-y: auto; padding: 14px 22px 26px; flex: 1; }
+        .p-biz-item {
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 12px 0; border-bottom: 1px solid rgba(28,31,34,0.08);
+        }
+        .p-biz-item:last-child { border-bottom: none; }
+        .p-status-chip {
+            flex-shrink: 0; margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+            padding: 5px 9px; border-radius: 6px; white-space: nowrap;
+        }
+        .p-status-chip.active { background: rgba(47,168,160,0.14); color: #0F6E56; border: 1px solid rgba(47,168,160,0.4); }
+        .p-status-chip.closed { background: rgba(226,84,63,0.12); color: #993C1D; border: 1px solid rgba(226,84,63,0.4); }
+        .p-status-chip.unknown { background: rgba(28,31,34,0.06); color: #8A8880; border: 1px solid rgba(28,31,34,0.2); }
+        .p-biz-info { flex: 1; min-width: 0; }
+        .p-biz-info .p-name { font-size: 15px; font-weight: 700; }
+        .p-biz-info .p-meta { font-size: 12px; color: #5F5E5A; margin-top: 3px; }
+        .p-biz-info .p-addr { font-size: 11.5px; color: #8A8880; margin-top: 2px; }
+        .p-biz-type-tag {
+            font-size: 10.5px; font-weight: 700; color: #0F6E56;
+            background: rgba(47,168,160,0.14); padding: 2px 8px; border-radius: 4px; margin-right: 6px;
+        }
+        .p-biz-empty { text-align: center; padding: 30px 10px; color: #8A8880; font-size: 13px; }
+        .p-tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+        .p-safety-tag {
+            font-size: 10.5px; font-weight: 700; color: #993C1D;
+            background: rgba(226,84,63,0.1); border: 1px solid rgba(226,84,63,0.3);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .p-facility-tag {
+            font-size: 10.5px; color: #5F5E5A;
+            background: rgba(28,31,34,0.05); padding: 2px 8px; border-radius: 4px;
+        }
+        .p-no-safety { font-size: 11px; color: #B8544A; font-style: italic; margin-top: 6px; }
+
+        /* ===== 참고 지점 (공항/여객선터미널/항구) ===== */
+        .p-ref-icon { display: flex; align-items: center; justify-content: center; }
+        .p-ref-marker {
+            width: 26px; height: 26px; border-radius: 7px;
+            background: #F7F4EC; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+            border: 2px solid #0B2438; cursor: pointer;
+        }
+        .p-ref-marker.harbor { border-color: #0F6E56; }
+        .p-ref-label {
+            position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; white-space: nowrap; color: #F7F4EC;
+            background: rgba(7,23,38,0.92); padding: 2px 7px; border-radius: 4px;
+            font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .12s ease;
+        }
+        .p-ref-icon:hover .p-ref-label { opacity: 1; }
+
+        /* ===== 제주시 · 서귀포시 경계 라벨 ===== */
+        .p-boundary-label {
+            font-family: 'Black Han Sans', sans-serif; font-size: 15px;
+            color: rgba(247,244,236,0.5); pointer-events: none;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- [신규] 최상단 사이트 제목/부제목 -->
+    <div class="site-header">
+        <h1 class="site-title">제주해양지도 안전 신호등체계</h1>
+        <p class="site-subtitle">🤿 다이빙/스노클링 가기전에 꼭 신호등(🟢/🟡/🔴) 확인하고 가세요</p>
+    </div>
+
+    <!-- [신규] 최상단 액티비티 모드 배너 -->
+    <div class="mode-banner">
+        <div class="mode-btn" id="mode-scuba" data-mode="scuba">스쿠버다이빙</div>
+        <div class="mode-btn" id="mode-freediving" data-mode="freediving">프리다이빙</div>
+        <div class="mode-btn" id="mode-snorkeling" data-mode="snorkeling">스노클링</div>
+        <div class="mode-btn active" id="mode-beach" data-mode="beach">해수욕장·포구</div>
+    </div>
+
+    <!-- [신규] 스노클링 모드 전용 필터바 - 기본은 숨김, 스노클링 모드 선택 시에만 표시 -->
+    <div class="filter-container" id="snorkel-filter-container" style="display:none;">
+        <div class="filter-bar-item active" id="snorkel-noportSpot-btn">
+            <span>🤿</span>
+            <span id="snorkel-noportSpot-filter-text">스노클링 핫플레이스 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="snorkel-beach-btn">
+            <span>⛱️</span>
+            <span id="snorkel-beach-filter-text">해변 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="snorkel-port-btn">
+            <span>⚓</span>
+            <span id="snorkel-port-filter-text">포구 (..)</span>
+        </div>
+    </div>
+
+    <div class="filter-container" id="beach-filter-container">
+        <div class="filter-bar-item active" id="beach-btn">
+            <span>⛱️</span>
+            <span id="beach-filter-text">해수욕장/해안가 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="port-btn">
+            <span style="display: inline-flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                    <path d="M 12,2 L 19,13 L 12,13 Z" fill="#2563eb" />
+                    <path d="M 11,3 L 6,13 L 11,13 Z" fill="#60a5fa" />
+                    <path d="M 3,14 L 21,14 L 18,19 L 6,19 Z" fill="#1d4ed8" stroke="#1e3a8a" stroke-width="1" />
+                </svg>
+            </span>
+            <span id="port-filter-text">어촌포구/동네어항 (..)</span>
+        </div>
+        <div class="filter-bar-item active" id="shipPort-btn">
+            <span style="display: inline-flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                    <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#94a3b8"/>
+                    <path d="M2 15l2 4h16l2-4H2z" fill="#0f172a"/>
+                </svg>
+            </span>
+            <span id="shipPort-filter-text">여객선/대형·크루즈항 (..)</span>
+        </div>
+    </div>
+
+    <div class="layer-banner">
+        <div class="layer-btn active" id="layer-illust">제주 해양지도</div>
+        <div class="layer-btn" id="layer-satellite">구글 위성지도</div>
+    </div>
+
+    <div id="map-wrapper">
+        <div id="map"></div>
+
+        <!-- [신규] 스쿠버/프리다이빙 등 데이터 준비 전 모드용 안내 오버레이 -->
+        <div class="mode-comingsoon-overlay" id="comingsoon-overlay">
+            <div class="cs-emoji">🚧</div>
+            <div class="cs-title" id="comingsoon-title">준비 중입니다</div>
+            <div class="cs-desc">해당 카테고리 데이터는 곧 추가될 예정이에요</div>
+        </div>
+
+        <!-- [신규] 스크롤 시 지도가 확대되는 것을 막기 위한 안내 배지 -->
+        <div class="scroll-hint" id="map-scroll-hint">🖱 클릭하면 스크롤로 확대·축소할 수 있어요</div>
+
+        <!-- [신규] 일러스트 해안선 보정 패널 - ?calibrate=1 접속시에만 JS로 display:block 처리됨 -->
+        <div id="cal-panel" style="display:none;">
+            <div class="cal-title">🛠️ 해안선 보정 (개발자용)</div>
+            <div class="cal-row">
+                <span>이동 단위</span>
+                <select id="cal-step">
+                    <option value="0.01">크게</option>
+                    <option value="0.002" selected>중간</option>
+                    <option value="0.0005">미세</option>
+                    <option value="0.0001">아주 미세</option>
+                </select>
+            </div>
+            <div class="cal-dpad">
+                <button id="cal-up">▲</button>
+                <div>
+                    <button id="cal-left">◀</button>
+                    <button id="cal-right">▶</button>
+                </div>
+                <button id="cal-down">▼</button>
+            </div>
+            <div class="cal-row">
+                <button id="cal-rot-l">↺ 회전</button>
+                <button id="cal-rot-r">회전 ↻</button>
+            </div>
+            <div class="cal-row">
+                <button id="cal-scale-down">－ 축소</button>
+                <button id="cal-scale-up">＋ 확대</button>
+            </div>
+            <button id="cal-reset" class="cal-reset-btn">초기값으로 리셋</button>
+            <div class="cal-hint">✈️⚓ 아이콘 = 실제 공항·항구 위치. 그림 속 위치와 맞을 때까지 조절하세요.</div>
+            <pre id="cal-output"></pre>
+            <div class="cal-hint">위 코드를 복사해서 &lt;script&gt; 안의 topleft/topright/bottomleft 3줄과 교체하면 영구 반영됩니다.</div>
+        </div>
+    </div>
+
+    <!-- [수정] 팝업과 겹치던 패널을 지도 밖 하단 고정 영역으로 완전히 분리 -->
+    <div id="ocean-panel">
+        <!-- 마커를 선택하기 전 기본으로 보이는 안내 문구 -->
+        <div id="panel-placeholder">
+            <div class="ph-icon">📍</div>
+            <div class="ph-text">이 곳에서 수온·풍속·파고 등 바다 입수가 안전한지 안내합니다.<br>지도에서 위치를 눌러보세요.</div>
+        </div>
+
+        <!-- 마커 선택 후 실제 정보가 표시되는 영역 -->
+        <div id="panel-content" style="display:none;">
+            <span class="panel-close" onclick="resetOceanPanel()">×</span>
+
+            <div class="panel-subtitle" id="p-name-mini" style="margin-bottom:10px;">📍 -</div>
+
+            <div class="info-card-section" style="border-top:none; padding-top:0;">
+                <div class="section-header">☀️ 실시간 바다 기상 및 파랑 정보</div>
+                <div class="weather-grid">
+                    <div class="weather-card">
+                        <div class="weather-label">바람 (풍속)</div>
+                        <div class="weather-val" id="w-wind">-.- m/s</div>
+                    </div>
+                    <div class="weather-card">
+                        <div class="weather-label">파도 (파고)</div>
+                        <div class="weather-val" id="w-wave">-.- m</div>
+                    </div>
+                    <div class="weather-card">
+                        <div class="weather-label">파주기 (너울)</div>
+                        <div class="weather-val" id="w-period">-.- s</div>
+                    </div>
+                </div>
+                <div class="marine-evaluation" id="marine-eval"></div>
+            </div>
+
+            <div class="info-card-section" style="border:none; padding:0; margin:0;">
+                <div class="section-header">🌊 오늘의 물때 (국립해양조사원 연계)</div>
+                <table class="tide-table">
+                    <thead>
+                        <tr>
+                            <th>구분</th>
+                            <th>예보시각</th>
+                            <th>조위 (cm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tide-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== [신규] 업체 분포 클러스터 지도 (인증 파트너 디렉토리 연동) ===== -->
+    <section>
+        <div class="partner-section-head">
+            <h2>📍 제주도 해양레저스포츠 업체 현황</h2>
+            <p>원을 눌러 해당 지역의 인증 파트너를 확인하세요. 원이 클수록 등록 업체가 많은 지역입니다.</p>
+        </div>
+        <div class="partner-map-shell">
+            <div id="cluster-map"></div>
+            <div class="p-legend">
+                <h4>행정동별 등록 업체</h4>
+                <div class="p-legend-row"><span class="p-legend-dot pl1"></span>15개 이상</div>
+                <div class="p-legend-row"><span class="p-legend-dot pl2"></span>5 ~ 14개</div>
+                <div class="p-legend-row"><span class="p-legend-dot pl3"></span>5개 미만</div>
+                <div class="p-legend-total">전체 등록 <b id="p-legend-total">-</b>개 · <span id="p-legend-dong-count">-</span>개 행정동</div>
+            </div>
+            <div class="scroll-hint" id="cluster-scroll-hint">🖱 클릭하면 스크롤로 확대·축소할 수 있어요</div>
+        </div>
+    </section>
+
+    <div class="p-backdrop" id="p-backdrop"></div>
+    <div class="p-sheet" id="p-sheet">
+        <div class="p-sheet-handle" id="p-sheet-handle"></div>
+        <div class="p-sheet-header">
+            <div>
+                <h3 id="p-sheet-title">-</h3>
+                <div class="p-sub" id="p-sheet-sub">-</div>
+            </div>
+            <button class="p-sheet-close" id="p-sheet-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="p-sheet-list" id="p-sheet-list"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-imageoverlay-rotated@0.2.1/Leaflet.ImageOverlay.Rotated.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+    
+    <script>
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const map = L.map('map', {
+                minZoom: 6,
+                maxZoom: 14,
+                zoomControl: true,
+                scrollWheelZoom: false,
+                maxBoundsViscosity: 1.0 
+            }).setView([33.3798, 126.5312], 11);
+
+            // [신규] 스크롤하면 지도가 확대되어 페이지가 안 내려가는 문제 방지:
+            // 지도를 클릭해야 스크롤 확대가 켜지고, 마우스가 지도를 벗어나면 다시 꺼짐
+            const mapWrapperEl = document.getElementById('map-wrapper');
+            const mapScrollHint = document.getElementById('map-scroll-hint');
+            map.on('click', () => {
+                map.scrollWheelZoom.enable();
+                if (mapScrollHint) mapScrollHint.classList.add('hide');
+            });
+            mapWrapperEl.addEventListener('mouseleave', () => {
+                map.scrollWheelZoom.disable();
+            });
+
+            const googleSatelliteLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                attribution: '© Google Map Satellite'
+            });
+
+            const imageUrl = 'https://github.com/GinajiyoungSong/jeflow/blob/main/jejuisland.jpeg?raw=true';
+            const ORIG_CORNERS = {
+                topleft:    L.latLng(33.60650, 126.08050),
+                topright:   L.latLng(33.65124, 127.02926),
+                bottomleft: L.latLng(33.12214, 126.10334)
+            };
+            let calTopleft = L.latLng(ORIG_CORNERS.topleft.lat, ORIG_CORNERS.topleft.lng);
+            let calTopright = L.latLng(ORIG_CORNERS.topright.lat, ORIG_CORNERS.topright.lng);
+            let calBottomleft = L.latLng(ORIG_CORNERS.bottomleft.lat, ORIG_CORNERS.bottomleft.lng);
+            const illustOverlay = L.imageOverlay.rotated(imageUrl, calTopleft, calTopright, calBottomleft, { 
+                opacity: 1.0, 
+                interactive: false 
+            });
+
+            illustOverlay.addTo(map);
+
+            const imageBounds = L.latLngBounds(L.latLng(33.12214, 126.08050), L.latLng(33.65124, 127.05210));
+            const illustPanBounds = imageBounds.pad(0.4); 
+            map.setMaxBounds(illustPanBounds);
+
+            /* ================================================================
+             * 🛠️ 일러스트 해안선 미세조정 도구 (개발자용, 평소엔 안 보임)
+             * ================================================================
+             * 사이트 주소 뒤에 ?calibrate=1 을 붙여서 접속하면 (예: index.html?calibrate=1)
+             * 지도 오른쪽 위에 보정 패널이 뜹니다.
+             * - 이동/회전/확대축소 버튼으로 그림을 실제 좌표에 맞게 조절
+             * - 항구/공항 등 실제 위치 기준점이 함께 표시되어 비교 가능
+             * - 마음에 드는 위치를 찾으면 패널에 표시된 코드를 복사해서
+             *   위 ORIG_CORNERS 값 3줄을 교체하면 영구 반영됩니다.
+             * ================================================================ */
+            const calRefLayer = L.layerGroup();
+            const CAL_REF_POINTS = [
+                { name:"제주국제공항", lat:33.5070, lng:126.4930, icon:"✈️" },
+                { name:"제주항 국제여객선터미널", lat:33.5289, lng:126.5218, icon:"🚢" },
+                { name:"성산항", lat:33.4636, lng:126.9276, icon:"⚓" },
+                { name:"보목항", lat:33.2377, lng:126.5983, icon:"⚓" },
+                { name:"강정항", lat:33.2320, lng:126.4910, icon:"⚓" },
+                { name:"서귀포항", lat:33.2400, lng:126.5650, icon:"⚓" },
+                { name:"법환항", lat:33.2420, lng:126.5280, icon:"⚓" },
+                { name:"신창항", lat:33.3216, lng:126.1740, icon:"⚓" },
+                { name:"애월항", lat:33.4665, lng:126.3225, icon:"⚓" }
+            ];
+            CAL_REF_POINTS.forEach(p => {
+                const icon = L.divIcon({
+                    className:'',
+                    html:`<div class="cal-ref-marker">${p.icon}<span class="cal-ref-label">${p.name}</span></div>`,
+                    iconSize:[22,22], iconAnchor:[11,11]
+                });
+                L.marker([p.lat, p.lng], { icon }).addTo(calRefLayer);
+            });
+
+            function repositionIllust(){
+                illustOverlay.reposition(calTopleft, calTopright, calBottomleft);
+                const out = document.getElementById('cal-output');
+                if (out){
+                    out.textContent =
+`const topleft    = L.latLng(${calTopleft.lat.toFixed(5)}, ${calTopleft.lng.toFixed(5)});
+const topright   = L.latLng(${calTopright.lat.toFixed(5)}, ${calTopright.lng.toFixed(5)});
+const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng.toFixed(5)});`;
+                }
+            }
+
+            function calGetStep(){
+                const sel = document.getElementById('cal-step');
+                return sel ? parseFloat(sel.value) : 0.001;
+            }
+
+            function calTranslate(dLat, dLng){
+                const step = calGetStep();
+                calTopleft = L.latLng(calTopleft.lat + dLat*step, calTopleft.lng + dLng*step);
+                calTopright = L.latLng(calTopright.lat + dLat*step, calTopright.lng + dLng*step);
+                calBottomleft = L.latLng(calBottomleft.lat + dLat*step, calBottomleft.lng + dLng*step);
+                repositionIllust();
+            }
+
+            function calRotate(deg){
+                const rad = deg * Math.PI / 180;
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                function rot(p){
+                    const dLat = p.lat - calTopleft.lat, dLng = p.lng - calTopleft.lng;
+                    return L.latLng(calTopleft.lat + (dLat*cos - dLng*sin), calTopleft.lng + (dLat*sin + dLng*cos));
+                }
+                calTopright = rot(calTopright);
+                calBottomleft = rot(calBottomleft);
+                repositionIllust();
+            }
+
+            function calScale(factor){
+                function sc(p){
+                    return L.latLng(calTopleft.lat + (p.lat-calTopleft.lat)*factor, calTopleft.lng + (p.lng-calTopleft.lng)*factor);
+                }
+                calTopright = sc(calTopright);
+                calBottomleft = sc(calBottomleft);
+                repositionIllust();
+            }
+
+            function calReset(){
+                calTopleft = L.latLng(ORIG_CORNERS.topleft.lat, ORIG_CORNERS.topleft.lng);
+                calTopright = L.latLng(ORIG_CORNERS.topright.lat, ORIG_CORNERS.topright.lng);
+                calBottomleft = L.latLng(ORIG_CORNERS.bottomleft.lat, ORIG_CORNERS.bottomleft.lng);
+                repositionIllust();
+            }
+
+            if (new URLSearchParams(window.location.search).get('calibrate') === '1'){
+                calRefLayer.addTo(map);
+                const panel = document.getElementById('cal-panel');
+                if (panel){
+                    panel.style.display = 'block';
+                    document.getElementById('cal-up').addEventListener('click', () => calTranslate(1, 0));
+                    document.getElementById('cal-down').addEventListener('click', () => calTranslate(-1, 0));
+                    document.getElementById('cal-left').addEventListener('click', () => calTranslate(0, -1));
+                    document.getElementById('cal-right').addEventListener('click', () => calTranslate(0, 1));
+                    document.getElementById('cal-rot-l').addEventListener('click', () => calRotate(-0.3));
+                    document.getElementById('cal-rot-r').addEventListener('click', () => calRotate(0.3));
+                    document.getElementById('cal-scale-up').addEventListener('click', () => calScale(1.01));
+                    document.getElementById('cal-scale-down').addEventListener('click', () => calScale(0.99));
+                    document.getElementById('cal-reset').addEventListener('click', calReset);
+                    repositionIllust();
+                }
+            }
+
+            document.getElementById('layer-illust').addEventListener('click', () => {
+                document.getElementById('layer-illust').classList.add('active');
+                document.getElementById('layer-satellite').classList.remove('active');
+                map.removeLayer(googleSatelliteLayer);
+                illustOverlay.addTo(map);
+                document.getElementById('map').style.backgroundColor = '#d1eae8';
+                map.setMaxBounds(illustPanBounds); 
+            });
+
+            document.getElementById('layer-satellite').addEventListener('click', () => {
+                document.getElementById('layer-satellite').classList.add('active');
+                document.getElementById('layer-illust').classList.remove('active');
+                map.removeLayer(illustOverlay);
+                googleSatelliteLayer.addTo(map);
+                document.getElementById('map').style.backgroundColor = '#111';
+                map.setMaxBounds(null); 
+            });
+
+            const layers = {
+                beach: L.layerGroup().addTo(map),
+                port: L.layerGroup().addTo(map),
+                ferry: L.layerGroup().addTo(map),
+                largePort: L.layerGroup().addTo(map),
+                // [신규] 스노클링 모드 전용 레이어 - 기본 모드(해수욕장·포구)에서는 지도에 붙이지 않음
+                snorkelNoport: L.layerGroup(),
+                snorkelBeach: L.layerGroup(),
+                snorkelPort: L.layerGroup(),
+                snorkelSpot: L.layerGroup()
+            };
+
+            const parasolIcon = L.divIcon({ 
+                html: '⛱️', 
+                className: 'custom-marker parasol-marker', 
+                iconSize: [32, 32], 
+                iconAnchor: [16, 16], 
+                popupAnchor: [0, -10] 
+            });
+
+            const blueSailboatSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M 12,2 L 19,13 L 12,13 Z" fill="#2563eb" />
+                <path d="M 11,3 L 6,13 L 11,13 Z" fill="#60a5fa" />
+                <line x1="11.5" y1="2" x2="11.5" y2="15" stroke="#1e3a8a" stroke-width="1" />
+                <path d="M 3,14 L 21,14 L 18,19 L 6,19 Z" fill="#1d4ed8" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round" />
+            </svg>`;
+            const portIcon = L.divIcon({ html: blueSailboatSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            // [신규] noport(기능 상실 포구) 전용 - 배 대신 스노클링 마스크 아이콘
+            const noPortIcon = L.divIcon({
+                html: '🤿',
+                className: 'custom-marker parasol-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -10]
+            });
+
+            const orangeFerrySvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M4 11h16v3H4zm2-5h12v4H6z" fill="#f97316"/>
+                <path d="M2 15l2 4h16l2-4H2z" fill="#ea580c"/>
+                <rect x="8" y="2" width="2" height="3" fill="#4b5563"/>
+                <rect x="14" y="2" width="2" height="3" fill="#4b5563"/>
+            </svg>`;
+            const ferryIcon = L.divIcon({ html: orangeFerrySvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            const cruiseShipSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.35));">
+                <path d="M3 8h17v5H3V8z" fill="#e2e8f0" />
+                <path d="M5 4h12v3H5V4z" fill="#cbd5e1" />
+                <rect x="8" y="1" width="3" height="2" fill="#ef4444" />
+                <path d="M1 14h22l-2 6H3l-2-6z" fill="#0f172a" />
+            </svg>`;
+            const largePortIcon = L.divIcon({ html: cruiseShipSvg, className: 'custom-marker', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -10] });
+
+            let beachCount = 0, portCount = 0, ferryCount = 0, largePortCount = 0;
+            const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp6QfAMngRHE3kSQVduZjx5DitkrGRdejfObMpCaTW2KfBER5aF2g2gIePy1ML5nIBdEOthIPoImaI/pub?output=csv';
+
+            Papa.parse(googleSheetCsvUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const data = results.data;
+                    data.forEach(item => {
+                        const typeVal = (item.category || '').trim().toLowerCase();
+                        const nameVal = (item.name || '').trim();
+                        const latVal = parseFloat(item.latitude);
+                        const lngVal = parseFloat(item.longitude);
+                        const infoVal = (item.information || '').trim();
+                        const descVal = (item.desc || '').trim();
+                        const beachNumVal = (item.beach_num || '').toString().trim(); // [신규] 해수욕장 날씨 API용 해변코드
+                        if (!latVal || !lngVal || isNaN(latVal) || isNaN(lngVal) || !nameVal) return;
+
+                        let marker;
+                        if (typeVal === 'beach') {
+                            marker = L.marker([latVal, lngVal], { icon: parasolIcon }).addTo(layers.beach);
+                            beachCount++;
+                        }
+                        else if (typeVal === 'port') {
+                            marker = L.marker([latVal, lngVal], { icon: portIcon }).addTo(layers.port);
+                            portCount++;
+                        }
+                        else if (typeVal === 'noport') {
+                            // [신규] 기능 상실 포구 - 어촌포구 필터/카운트에는 함께 묶이지만 아이콘만 스노클링 마스크
+                            marker = L.marker([latVal, lngVal], { icon: noPortIcon }).addTo(layers.port);
+                            portCount++;
+                        }
+                        else if (typeVal === 'ferry') {
+                            marker = L.marker([latVal, lngVal], { icon: ferryIcon }).addTo(layers.ferry);
+                            ferryCount++;
+                        }
+                        else if (typeVal === 'large') {
+                            marker = L.marker([latVal, lngVal], { icon: largePortIcon }).addTo(layers.largePort);
+                            largePortCount++;
+                        }
+
+                        if (marker) {
+                            marker.on('click', () => {
+                                handleMarkerClick(marker, nameVal, typeVal, descVal, infoVal, latVal, lngVal, beachNumVal);
+                            });
+                        }
+                    });
+
+                    document.getElementById('beach-filter-text').innerText = `해수욕장/해안가 (${beachCount})`;
+                    document.getElementById('port-filter-text').innerText = `어촌포구/동네어항 (${portCount})`;
+                    document.getElementById('shipPort-filter-text').innerText = `여객선/대형·크루즈항 (${ferryCount + largePortCount})`;
+
+                    map.invalidateSize();
+                }
+            });
+
+            /* ================================================================
+             * 🗺️ 새 모드(예: 스쿠버다이빙, 프리다이빙)를 추가하고 싶을 때 - 여기부터 읽으세요
+             * ================================================================
+             * 지금 "스노클링 모드"가 만들어진 방식을 그대로 복사해서 쓰면 됩니다.
+             * 필요한 작업은 총 5곳이에요:
+             *
+             * [1단계] 구글 시트에 새 탭 만들고 "파일 → 공유 → 웹에 게시" → 그 탭만 선택 → CSV로 게시
+             *         → 나온 링크를 아래처럼 새 변수로 선언 (예: const scubaCsvUrl = '...');
+             *
+             * [2단계] HTML의 <div class="mode-banner"> 안에 있는 버튼은 이미 4개 다 만들어져 있어요
+             *         (id="mode-scuba", id="mode-freediving") - 새로 안 만들어도 됨, 이미 있음
+             *
+             * [3단계] 위쪽 const layers = {...} 객체 안에 이 모드용 레이어그룹을 추가
+             *         (예: scubaSpot: L.layerGroup())  ← snorkelSpot 만든 것과 똑같은 방식
+             *
+             * [4단계] 이 스노클링 CSV 로드 블록(바로 아래)을 통째로 복사해서
+             *         snorkelingCsvUrl → scubaCsvUrl로, layers.snorkelXxx → layers.scubaXxx로 이름만 바꿔서 붙여넣기
+             *
+             * [5단계] 맨 아래쪽 activateMode(mode) 함수에서
+             *         else if (mode === 'scuba') { comingSoonOverlay... } 부분을
+             *         comingSoonOverlay 대신 실제 레이어를 보여주는 코드로 교체
+             *         (snorkeling 모드 처리하는 코드 블록을 그대로 참고하면 됩니다)
+             *
+             * 막히면 "스쿠버다이빙 카테고리 만들자" 라고 말씀하시면 제가 이어서 해드릴게요.
+             * ================================================================ */
+
+            // [신규] 스노클링 모드 전용 CSV 로드 (2_snorkeling_DB 탭)
+            // 아래 URL은 2_snorkeling_DB 탭을 "웹에 게시"해서 나온 실제 CSV 링크입니다 (이미 연결 완료됨).
+            // 시트에서 이 탭의 행을 추가/수정하면 사이트에 자동 반영돼요 - 코드를 다시 건드릴 필요 없음.
+            const snorkelingCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp6QfAMngRHE3kSQVduZjx5DitkrGRdejfObMpCaTW2KfBER5aF2g2gIePy1ML5nIBdEOthIPoImaI/pub?gid=413366566&single=true&output=csv';
+            let snorkelNoportCount = 0, snorkelBeachCount = 0, snorkelPortCount = 0, snorkelSpotCount = 0;
+
+            if (snorkelingCsvUrl && !snorkelingCsvUrl.startsWith('PASTE_')) {
+                Papa.parse(snorkelingCsvUrl, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        results.data.forEach(item => {
+                            // 👉 시트 컬럼명이 바뀌면 아래 item.xxx 부분만 맞춰서 고치면 됩니다.
+                            const typeVal = (item.category || '').trim().toLowerCase();
+                            const nameVal = (item.name || '').trim();
+                            const latVal = parseFloat(item.latitude);
+                            const lngVal = parseFloat(item.longitude);
+                            const infoVal = (item.information || '').trim();
+                            const descVal = (item.desc || '').trim();
+                            if (!latVal || !lngVal || isNaN(latVal) || isNaN(lngVal) || !nameVal) return;
+
+                            // 👉 시트에 새 category 값(예: 'cave' 같은 것)을 추가하고 싶으면
+                            //    여기에 else if (typeVal === 'cave') { ... } 한 줄만 추가하면 됩니다.
+                            let marker;
+                            if (typeVal === 'noport') {
+                                marker = L.marker([latVal, lngVal], { icon: noPortIcon }).addTo(layers.snorkelNoport);
+                                snorkelNoportCount++;
+                            } else if (typeVal === 'beach') {
+                                marker = L.marker([latVal, lngVal], { icon: parasolIcon }).addTo(layers.snorkelBeach);
+                                snorkelBeachCount++;
+                            } else if (typeVal === 'port') {
+                                marker = L.marker([latVal, lngVal], { icon: portIcon }).addTo(layers.snorkelPort);
+                                snorkelPortCount++;
+                            } else if (typeVal === 'spot') {
+                                marker = L.marker([latVal, lngVal], { icon: noPortIcon }).addTo(layers.snorkelSpot);
+                                snorkelSpotCount++;
+                            }
+
+                            if (marker) {
+                                marker.on('click', () => {
+                                    handleMarkerClick(marker, nameVal, typeVal, descVal, infoVal, latVal, lngVal, '');
+                                });
+                            }
+                        });
+
+                        document.getElementById('snorkel-noportSpot-filter-text').innerText = `스노클링 핫플레이스 (${snorkelNoportCount + snorkelSpotCount})`;
+                        document.getElementById('snorkel-beach-filter-text').innerText = `해변 (${snorkelBeachCount})`;
+                        document.getElementById('snorkel-port-filter-text').innerText = `포구 (${snorkelPortCount})`;
+                    }
+                });
+            } else {
+                console.warn('스노클링 CSV URL이 아직 설정되지 않았어요. snorkelingCsvUrl 변수를 확인하세요.');
+            }
+
+            const btnMapping = {
+                'beach-btn': ['beach'],
+                'port-btn': ['port'],
+                'shipPort-btn': ['ferry', 'largePort']
+            };
+            Object.keys(btnMapping).forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                btn.addEventListener('click', () => {
+                    const layerKeys = btnMapping[btnId];
+                    if (btn.classList.contains('active')) {
+                        btn.classList.remove('active');
+                        btn.classList.add('inactive');
+                        layerKeys.forEach(key => map.removeLayer(layers[key]));
+                    } else {
+                        btn.classList.remove('inactive');
+                        btn.classList.add('active');
+                        layerKeys.forEach(key => map.addLayer(layers[key]));
+                    }
+                });
+            });
+
+            const triggerMapReset = () => { map.invalidateSize(); };
+
+            // [신규] 스노클링 모드 전용 필터바 토글
+            const snorkelBtnMapping = {
+                'snorkel-noportSpot-btn': ['snorkelNoport', 'snorkelSpot'],
+                'snorkel-beach-btn': ['snorkelBeach'],
+                'snorkel-port-btn': ['snorkelPort']
+            };
+            Object.keys(snorkelBtnMapping).forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                btn.addEventListener('click', () => {
+                    const layerKeys = snorkelBtnMapping[btnId];
+                    if (btn.classList.contains('active')) {
+                        btn.classList.remove('active');
+                        btn.classList.add('inactive');
+                        layerKeys.forEach(key => map.removeLayer(layers[key]));
+                    } else {
+                        btn.classList.remove('inactive');
+                        btn.classList.add('active');
+                        layerKeys.forEach(key => map.addLayer(layers[key]));
+                    }
+                });
+            });
+
+            // [신규] 최상단 4모드(스쿠버/프리다이빙/스노클링/해수욕장·포구) 전환 로직
+            const beachModeLayerKeys = ['beach', 'port', 'ferry', 'largePort'];
+            const snorkelModeLayerKeys = ['snorkelNoport', 'snorkelBeach', 'snorkelPort', 'snorkelSpot'];
+
+            const beachModeFilterBar = document.getElementById('beach-filter-container') || document.querySelectorAll('.filter-container')[1];
+            const snorkelModeFilterBar = document.getElementById('snorkel-filter-container');
+            const layerBannerEl = document.querySelector('.layer-banner');
+            const comingSoonOverlay = document.getElementById('comingsoon-overlay');
+            const comingSoonTitle = document.getElementById('comingsoon-title');
+
+            function setAllLayersOff() {
+                [...beachModeLayerKeys, ...snorkelModeLayerKeys].forEach(key => {
+                    if (layers[key]) map.removeLayer(layers[key]);
+                });
+            }
+
+            function activateMode(mode) {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('mode-' + mode).classList.add('active');
+
+                setAllLayersOff();
+                comingSoonOverlay.style.display = 'none';
+                snorkelModeFilterBar.style.display = 'none';
+                if (beachModeFilterBar) beachModeFilterBar.style.display = 'none';
+                layerBannerEl.style.display = 'none';
+                panelCloseIfOpen();
+
+                if (mode === 'beach') {
+                    if (beachModeFilterBar) beachModeFilterBar.style.display = 'flex';
+                    layerBannerEl.style.display = 'flex';
+                    // 각 필터 버튼이 현재 active 상태인 것만 다시 지도에 추가
+                    document.querySelectorAll('#beach-btn, #port-btn, #shipPort-btn').forEach(btn => {
+                        if (btn.classList.contains('active')) {
+                            (btnMapping[btn.id] || []).forEach(key => map.addLayer(layers[key]));
+                        }
+                    });
+                } else if (mode === 'snorkeling') {
+                    snorkelModeFilterBar.style.display = 'flex';
+                    document.querySelectorAll('#snorkel-noportSpot-btn, #snorkel-beach-btn, #snorkel-port-btn').forEach(btn => {
+                        if (btn.classList.contains('active')) {
+                            (snorkelBtnMapping[btn.id] || []).forEach(key => map.addLayer(layers[key]));
+                        }
+                    });
+                } else if (mode === 'scuba') {
+                    // 👉 스쿠버다이빙 데이터 준비되면 이 블록을 아래 snorkeling 블록처럼
+                    //    (필터바 보이기 + 레이어 addLayer) 하는 코드로 통째로 교체하면 됩니다.
+                    //    지금은 데이터가 없어서 "준비 중" 화면만 띄우는 상태예요.
+                    comingSoonTitle.innerText = '스쿠버다이빙 존 - 준비 중입니다';
+                    comingSoonOverlay.style.display = 'flex';
+                } else if (mode === 'freediving') {
+                    // 👉 프리다이빙도 위와 동일한 방식으로 나중에 교체
+                    comingSoonTitle.innerText = '프리다이빙 존 - 준비 중입니다';
+                    comingSoonOverlay.style.display = 'flex';
+                }
+                setTimeout(triggerMapReset, 200);
+            }
+
+            function panelCloseIfOpen() {
+                // [수정] 패널은 이제 항상 보이는 하단 고정 영역이므로, 모드 전환 시엔 안내 문구로만 리셋
+                window.resetOceanPanel();
+            }
+
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => activateMode(btn.dataset.mode));
+            });
+
+            window.addEventListener('resize', triggerMapReset);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(triggerMapReset, 300);
+            });
+            setTimeout(triggerMapReset, 300);
+            setTimeout(triggerMapReset, 1000);
+        });
+
+        function getStationCode(lat, lng) {
+            if (lng > 126.8) {
+                return { code: "DT_0022", name: "성산포" }; 
+            } else if (lat < 33.34) {
+                return { code: "DT_0010", name: "서귀포" }; 
+            } else {
+                return { code: "DT_0004", name: "제주" };    
+            }
+        }
+
+        function fetchWithTimeout(url, timeoutMs = 10000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+        }
+
+        /* ================================================================
+         * 📹🎬 [신규] 팝업 내 CCTV/드론영상 매칭 - "무료 스팟소개" 콘텐츠
+         * 지점명으로 월파감시 CCTV, 공공저작물 드론영상을 검색해서 팝업 안에 표시합니다.
+         * 나중에 유료 멤버십(시크릿 스팟)을 붙일 때는 이 아래에 카드 하나만 더 추가하면 됩니다.
+         * ================================================================ */
+        const MEDIA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+
+        function extractYoutubeId(url) {
+            if (!url) return null;
+            const m = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
+            return m ? m[1] : null;
+        }
+
+        async function fetchSeaCctv(keyword) {
+            try {
+                const res = await fetchWithTimeout(`${MEDIA_APPS_SCRIPT_URL}?action=seacctv&pointname=${encodeURIComponent(keyword)}`, 8000);
+                if (!res.ok) return [];
+                const json = await res.json();
+                return json.items || [];
+            } catch (err) {
+                console.warn('CCTV 조회 실패:', err);
+                return [];
+            }
+        }
+
+        async function fetchDroneVideo(keyword) {
+            try {
+                const res = await fetchWithTimeout(`${MEDIA_APPS_SCRIPT_URL}?action=dronevideo&title=${encodeURIComponent(keyword)}&pageSize=6`, 8000);
+                if (!res.ok) return [];
+                const json = await res.json();
+                return json.items || [];
+            } catch (err) {
+                console.warn('드론영상 조회 실패:', err);
+                return [];
+            }
+        }
+
+        function showCachedMedia(kind) {
+            const slot = document.getElementById('popup-media-slot');
+            const item = window.__popupMediaCache && window.__popupMediaCache[kind];
+            if (!slot || !item) return;
+
+            if (kind === 'cctv') {
+                slot.innerHTML = `
+                    <div class="popup-media-box">
+                        <span class="popup-media-badge">무료 스팟소개</span>
+                        <video id="popup-cctv-video" controls muted playsinline></video>
+                        <div class="popup-media-caption">📹 ${item.point_name} (실시간, 제주시청)</div>
+                    </div>`;
+                const video = document.getElementById('popup-cctv-video');
+                if (video && item.cctv_url) {
+                    if (window.Hls && Hls.isSupported()) {
+                        const hls = new Hls();
+                        hls.loadSource(item.cctv_url);
+                        hls.attachMedia(video);
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = item.cctv_url;
+                    }
+                }
+            } else {
+                const ytId = extractYoutubeId(item?.exts?.youtube);
+                slot.innerHTML = `
+                    <div class="popup-media-box">
+                        <span class="popup-media-badge">무료 스팟소개</span>
+                        ${ytId
+                            ? `<iframe src="https://www.youtube.com/embed/${ytId}" allowfullscreen></iframe>`
+                            : `<div class="popup-media-empty">영상을 불러올 수 없어요</div>`}
+                        <div class="popup-media-caption">🎬 ${item.title} (제주도청 공공저작물)</div>
+                    </div>`;
+            }
+        }
+
+        // [신규] Apps Script(action=beach)를 거쳐 해수욕장 파고/수온 조회
+        // ⚠️ 실제 API 응답의 정확한 필드명이 확인되지 않아, 기상청 표준 응답구조(response.body.items.item)를
+        //     기준으로 방어적으로 파싱합니다. 안 맞으면 콘솔에 찍히는 원본 응답을 보고 조정이 필요해요.
+        async function fetchBeachWeatherExtras(beachNum) {
+            const result = { waveHeight: null, waterTemp: null };
+            const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+
+            try {
+                const [waveRes, tempRes] = await Promise.all([
+                    fetchWithTimeout(`${appsScriptProxyUrl}?action=beach&type=wave&beach_num=${beachNum}`),
+                    fetchWithTimeout(`${appsScriptProxyUrl}?action=beach&type=temp&beach_num=${beachNum}`)
+                ]);
+
+                if (waveRes.ok) {
+                    const waveJson = await waveRes.json();
+                    console.log('[해수욕장 파고 API 원본 응답]', waveJson);
+                    const waveVal = extractBeachApiValue(waveJson, ['wh', 'waveHeight', 'wvhgt', 'value']);
+                    if (waveVal !== null) result.waveHeight = parseFloat(parseFloat(waveVal).toFixed(1));
+                }
+                if (tempRes.ok) {
+                    const tempJson = await tempRes.json();
+                    console.log('[해수욕장 수온 API 원본 응답]', tempJson);
+                    const tempVal = extractBeachApiValue(tempJson, ['tw', 'waterTemp', 'wtemp', 'value']);
+                    if (tempVal !== null) result.waterTemp = parseFloat(parseFloat(tempVal).toFixed(1));
+                }
+            } catch (err) {
+                console.error("해수욕장 날씨 API 조회 실패:", err);
+            }
+            return result;
+        }
+
+        // [신규] 기상청 표준 응답구조(response.body.items.item)에서 후보 필드명들을 순서대로 시도해 값 추출
+        function extractBeachApiValue(json, candidateKeys) {
+            try {
+                let items = json?.response?.body?.items?.item || json?.body?.items?.item;
+                if (!items) return null;
+                if (!Array.isArray(items)) items = [items];
+                if (items.length === 0) return null;
+                const first = items[0];
+                for (const key of candidateKeys) {
+                    if (first[key] !== undefined && first[key] !== null && first[key] !== '') {
+                        return first[key];
+                    }
+                }
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        /* ================================================================
+         * 🌬️ [신규] 하이브리드 기상 데이터 - 1순위: 기상청 단기예보(WSD/WAV)
+         * 실패하거나 값이 없으면 Open-Meteo로 자동 폴백합니다 (아래 handleMarkerClick 참고)
+         * ================================================================ */
+
+        // 위경도 → 기상청 격자좌표(nx, ny) 변환 (람베르트 정각원추도법, 기상청 공식 변환식)
+        function latLngToGrid(lat, lng) {
+            const RE = 6371.00877, GRID = 5.0;
+            const SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0;
+            const XO = 43, YO = 136;
+            const DEGRAD = Math.PI / 180.0;
+
+            const re = RE / GRID;
+            const slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD;
+            const olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
+
+            let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+            sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+            let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+            sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+            let ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+            ro = re * sf / Math.pow(ro, sn);
+
+            let ra = Math.tan(Math.PI * 0.25 + lat * DEGRAD * 0.5);
+            ra = re * sf / Math.pow(ra, sn);
+            let theta = lng * DEGRAD - olon;
+            if (theta > Math.PI) theta -= 2.0 * Math.PI;
+            if (theta < -Math.PI) theta += 2.0 * Math.PI;
+            theta *= sn;
+
+            return {
+                nx: Math.floor(ra * Math.sin(theta) + XO + 0.5),
+                ny: Math.floor(ro - ra * Math.cos(theta) + YO + 0.5)
+            };
+        }
+
+        // 기상청 단기예보 발표시각(02,05,08,11,14,17,20,23시, 발표 10분 후부터 조회 가능) 중
+        // 지금 시점에서 사용 가능한 가장 최근 base_date/base_time을 계산
+        function getVilageBaseDateTime() {
+            const ISSUE_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
+            const now = new Date();
+            const h = now.getHours(), m = now.getMinutes();
+            let candidate = null;
+            for (let i = ISSUE_HOURS.length - 1; i >= 0; i--) {
+                if (h > ISSUE_HOURS[i] || (h === ISSUE_HOURS[i] && m >= 10)) { candidate = ISSUE_HOURS[i]; break; }
+            }
+            const d = new Date(now);
+            if (candidate === null) {
+                d.setDate(d.getDate() - 1);
+                candidate = 23;
+            }
+            const y = d.getFullYear();
+            const mo = String(d.getMonth() + 1).padStart(2, '0');
+            const da = String(d.getDate()).padStart(2, '0');
+            return { base_date: `${y}${mo}${da}`, base_time: String(candidate).padStart(2, '0') + '00' };
+        }
+
+        // Apps Script(action=vilage) 경유 - 기상청 단기예보에서 바람(WSD)·파고(WAV) 시도
+        // 실패하거나 해당 격자에 값이 없으면 { wsd:null, wav:null } 반환 → 호출부에서 Open-Meteo 값 유지
+        async function fetchVilageFcst(lat, lng, appsScriptProxyUrl) {
+            try {
+                const { nx, ny } = latLngToGrid(lat, lng);
+                const { base_date, base_time } = getVilageBaseDateTime();
+                const url = `${appsScriptProxyUrl}?action=vilage&nx=${nx}&ny=${ny}&base_date=${base_date}&base_time=${base_time}`;
+                const res = await fetchWithTimeout(url, 6000);
+                if (!res.ok) return { wsd: null, wav: null };
+                const json = await res.json();
+                console.log('[기상청 단기예보 원본 응답]', json);
+                const items = json?.response?.body?.items?.item;
+                if (!items || !Array.isArray(items) || items.length === 0) return { wsd: null, wav: null };
+
+                const firstFcstTime = items[0].fcstTime; // 가장 이른(=현재와 가장 가까운) 예보시각 기준
+                let wsd = null, wav = null;
+                items.forEach(it => {
+                    if (it.fcstTime !== firstFcstTime) return;
+                    if (it.category === 'WSD') wsd = parseFloat(it.fcstValue);
+                    if (it.category === 'WAV') wav = parseFloat(it.fcstValue);
+                });
+                return {
+                    wsd: (wsd === null || isNaN(wsd)) ? null : wsd,
+                    wav: (wav === null || isNaN(wav)) ? null : wav
+                };
+            } catch (err) {
+                console.warn('기상청 단기예보 조회 실패, Open-Meteo 값으로 폴백:', err);
+                return { wsd: null, wav: null };
+            }
+        }
+
+        // Apps Script(action=tiderecent) 경유 - KHOA 조위관측소 최신 관측데이터에서 실측 풍속(wspd) 시도
+        // 이 API엔 파고가 없어서 바람(풍속)에만 적용됨. 실패/값없음이면 { wspd:null } 반환 → 단기예보/Open-Meteo로 폴백
+        async function fetchKhoaRecentWind(stationCode, reqDate, appsScriptProxyUrl) {
+            try {
+                const url = `${appsScriptProxyUrl}?action=tiderecent&obsCode=${stationCode}&reqDate=${reqDate}&min=60`;
+                const res = await fetchWithTimeout(url, 6000);
+                if (!res.ok) return { wspd: null };
+                const json = await res.json();
+                const items = json?.response?.body?.items?.item;
+                if (!items) return { wspd: null };
+                const first = Array.isArray(items) ? items[0] : items;
+                const wspd = parseFloat(first?.wspd);
+                return { wspd: isNaN(wspd) ? null : wspd };
+            } catch (err) {
+                console.warn('KHOA 실측 조회 실패, 단기예보/Open-Meteo로 폴백:', err);
+                return { wspd: null };
+            }
+        }
+
+        async function handleMarkerClick(marker, name, type, desc, info, lat, lng, beachNum) {
+            
+            // [신규] 여객선/대형·크루즈항은 법적으로 일반인 입수·스노클링이 금지된 구역
+            const isRestrictedZone = (type === 'ferry' || type === 'large');
+            // [신규] 공식 해수욕장 API 사용 가능 여부 (beach 타입이면서 beach_num이 채워져 있을 때만)
+            const useBeachApi = (type === 'beach' && beachNum);
+
+            // [수정] 팝업(지도 위)에는 로딩 문구, 하단 패널 미니 라벨도 로딩 표시
+            marker.bindPopup(`<div style="text-align:center; padding: 12px; font-size:12px; color:#4b5563;">⏳ ${isRestrictedZone ? '항구 정보' : '실시간 해양 기상 및 물때'} 로딩 중...</div>`).openPopup();
+
+            document.getElementById('panel-placeholder').style.display = 'none';
+            const panelContentEl = document.getElementById('panel-content');
+            panelContentEl.style.display = 'block';
+            document.getElementById('p-name-mini').innerText = `📍 ${name} - 로딩 중...`;
+
+            let windSpeed = 3.0; 
+            let waveHeight = 0.5; 
+            let wavePeriod = 5.0; 
+            let waterTemp = null; // [신규] 수온 - 해수욕장 API 성공 시에만 값이 채워짐
+            let rainLast12h = false; // [신규] 최근 12시간 내 강수 여부 (신호등 2단계 판정)
+            let rainLast24h = false; // [신규] 최근 24시간 내 강수 여부 (신호등 3단계 판정)
+            let windSource = "openmeteo"; // [신규] 바람 데이터 출처 표시용 ('kma' | 'openmeteo')
+            let waveSource = "openmeteo"; // [신규] 파고 데이터 출처 표시용 ('beach' | 'kma' | 'openmeteo')
+
+            // [최적화] 물때 조회에 필요한 값들을 미리 계산해서, 아래 날씨 조회와 "동시에" 요청을 시작함
+            // (기존에는 날씨 조회가 끝난 뒤에야 물때 조회를 시작해서, 대기 시간이 그대로 더해졌음)
+            const station = getStationCode(lat, lng);
+            const targetStation = station.name;
+            const stationCode = station.code;
+            const todayDate = new Date();
+            const yearStr = todayDate.getFullYear();
+            const monthStr = String(todayDate.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(todayDate.getDate()).padStart(2, '0');
+            const dateQueryStr = `${yearStr}${monthStr}${dayStr}`;
+            const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
+            const tideApiUrl = `${appsScriptProxyUrl}?obsCode=${stationCode}&date=${dateQueryStr}`;
+            // 👉 여기서 바로 발사 (await 안 함) - 아래 날씨/해수욕장 API 조회와 동시에 진행됨
+            const tidePromise = fetchWithTimeout(tideApiUrl, 15000).catch(err => {
+                console.error("물때 API 병렬 호출 실패:", err);
+                return null;
+            });
+
+            // [신규] CCTV/드론영상도 미리 조회 - 매칭되는 게 있을 때만 버튼을 보여주기 위함
+            // (버튼 누른 뒤에 조회하면 "없음" 상태를 버튼 눌러야만 알 수 있어서, 미리 확인하는 방식으로 변경)
+            const mediaPromise = Promise.all([
+                fetchSeaCctv(name),
+                fetchDroneVideo(name)
+            ]).catch(err => {
+                console.warn('CCTV/드론영상 병렬 조회 실패:', err);
+                return [[], []];
+            });
+
+            // [수정] 입수 금지 구역은 스노클링 판단용 기상 데이터를 애초에 조회하지 않음
+            if (!isRestrictedZone) {
+            try {
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m&hourly=precipitation&past_days=1&wind_speed_unit=ms&timezone=Asia%2FSeoul`;
+                const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period`;
+
+                /* ================================================================
+                 * 🚦 하이브리드 데이터 우선순위 (바람·파고에 한함, 파주기·강수는 Open-Meteo 고정)
+                 * 1순위: 기상청 단기예보(WSD/WAV) - 국내 공식 예보값, 격자 미보유 시 null
+                 * 2순위: 공식 해수욕장 파고부이(getWhBuoyBeach) - beach_num 있는 지점만, 더 정확해서 최종 우선
+                 * 3순위: Open-Meteo - 항상 값이 있어 최종 폴백으로 사용
+                 * ================================================================ */
+
+                // [최적화] 날씨/파랑/해수욕장API(파고·수온)/기상청 단기예보/KHOA 실측 5가지를 동시에 요청 (순차 대기 X)
+                const [weatherRes, marineRes, beachData, vilageData, khoaRecentData] = await Promise.all([
+                    fetchWithTimeout(weatherUrl),
+                    fetchWithTimeout(marineUrl),
+                    useBeachApi ? fetchBeachWeatherExtras(beachNum) : Promise.resolve({ waveHeight: null, waterTemp: null }),
+                    fetchVilageFcst(lat, lng, appsScriptProxyUrl),
+                    fetchKhoaRecentWind(stationCode, dateQueryStr, appsScriptProxyUrl)
+                ]);
+
+                if (weatherRes.ok) {
+                    const weatherData = await weatherRes.json();
+                    if (weatherData.current && weatherData.current.wind_speed_10m !== undefined) {
+                        windSpeed = parseFloat(weatherData.current.wind_speed_10m.toFixed(1));
+                    }
+                    // [신규] 최근 12시간/24시간 강수 여부 - 신호등 알고리즘 2단계·3단계 판정용
+                    if (weatherData.hourly && weatherData.hourly.time && weatherData.hourly.precipitation) {
+                        const times = weatherData.hourly.time;
+                        const precs = weatherData.hourly.precipitation;
+                        const now = new Date();
+                        let nowIdx = times.findIndex(t => new Date(t) > now);
+                        if (nowIdx === -1) nowIdx = times.length - 1;
+                        if (nowIdx < 1) nowIdx = 1;
+                        const idx12 = Math.max(0, nowIdx - 12);
+                        const idx24 = Math.max(0, nowIdx - 24);
+                        const sum12 = precs.slice(idx12, nowIdx).reduce((a, b) => a + (b || 0), 0);
+                        const sum24 = precs.slice(idx24, nowIdx).reduce((a, b) => a + (b || 0), 0);
+                        rainLast12h = sum12 > 0;
+                        rainLast24h = sum24 > 0;
+                    }
+                }
+                if (marineRes.ok) {
+                    const marineData = await marineRes.json();
+                    if (marineData.current) {
+                        if (marineData.current.wave_height !== undefined) {
+                            waveHeight = parseFloat(marineData.current.wave_height.toFixed(1));
+                        }
+                        if (marineData.current.wave_period !== undefined) {
+                            wavePeriod = parseFloat(marineData.current.wave_period.toFixed(1));
+                        }
+                    }
+                }
+
+                // [신규] 1순위 override: 기상청 단기예보(WSD/WAV) - 값이 있을 때만 Open-Meteo 값을 덮어씀
+                if (vilageData) {
+                    if (vilageData.wsd !== null) {
+                        windSpeed = parseFloat(vilageData.wsd.toFixed(1));
+                        windSource = "kma";
+                    }
+                    if (vilageData.wav !== null) {
+                        waveHeight = parseFloat(vilageData.wav.toFixed(1));
+                        waveSource = "kma";
+                    }
+                }
+
+                // [신규] 바람 최종 우선(실측) override: KHOA 조위관측소 실측 풍속 - 예보값보다 우선 적용
+                if (khoaRecentData && khoaRecentData.wspd !== null) {
+                    windSpeed = parseFloat(khoaRecentData.wspd.toFixed(1));
+                    windSource = "khoa";
+                }
+
+                // [신규] 2순위(파고 한정 최종 우선) override: 공식 해수욕장 파고부이 - 단기예보보다 더 정확해서 최종 우선 적용
+                if (useBeachApi) {
+                    if (beachData.waveHeight !== null) { waveHeight = beachData.waveHeight; waveSource = "beach"; }
+                    if (beachData.waterTemp !== null) waterTemp = beachData.waterTemp;
+                }
+            } catch (error) {
+                console.error("실시간 날씨 데이터 수집 실패, 가상 데이터 적용:", error);
+                windSpeed = parseFloat((1.0 + Math.random() * 8.5).toFixed(1)); 
+                waveHeight = parseFloat((0.1 + Math.random() * 1.8).toFixed(1)); 
+                wavePeriod = parseFloat((5.0 + Math.random() * 6.0).toFixed(1)); 
+                windSource = "openmeteo";
+                waveSource = "openmeteo";
+            }
+            }
+
+            let signalClass = "signal-ok";
+            let signalLabel = "최적 (장판)";
+            let signalIcon = "🟢";
+            let windStatus = "";
+            let waveStatus = "";
+            let guidelineText = "";
+
+            if (isRestrictedZone) {
+                // [신규] 여객선/대형항 전용 - 법적 입수금지 안내로 대체
+                signalClass = "signal-danger";
+                signalLabel = "입수 금지 구역";
+                signalIcon = "⚓";
+            } else {
+                /* ================================================================
+                 * 🚦 신호등 체계 알고리즘 (우선순위 평가 방식)
+                 * 가장 위험한 조건(🔴)부터 검사 → 그다음 주의 조건(🟡) → 모든 조건이
+                 * 완벽히 안전할 때만 🟢. if-elif-else 구조로, 위 단계에서 걸리면
+                 * 아래 단계는 검사하지 않습니다.
+                 * ================================================================ */
+
+                // 1단계: 🔴 빨강 (입수 금지 / 서핑 추천) - 아래 중 하나라도 해당하면 즉시 빨강
+                if (windSpeed >= 5.0 || waveHeight > 0.8 || wavePeriod > 8.0) {
+                    signalClass = "signal-danger";
+                    signalLabel = "입수 금지 / 서핑 추천";
+                    signalIcon = "🔴";
+                    guidelineText = "⚠️ 입수 금지 수준! 높은 파도 혹은 눈에 보이지 않는 먼바다 너울이 들어오고 있습니다.";
+
+                // 2단계: 🟡 노랑 (초보 주의 / 경계) - 빨강은 아니지만 아래 중 하나라도 해당
+                } else if (windSpeed > 3.0 || waveHeight >= 0.3 || wavePeriod > 5.0 || rainLast12h) {
+                    signalClass = "signal-caution";
+                    signalLabel = "초보 주의 / 경계";
+                    signalIcon = "🟡";
+                    guidelineText = "💨 초보자 주의! 파도가 치고 시야가 다소 흐릴 수 있으니 안전장비를 꼭 착용하세요.";
+
+                // [경계 케이스] 12시간 내 강수는 없었지만 24시간 내엔 있었던 경우 -
+                // 초록의 "24시간 내 강수 없음" AND 조건을 충족하지 못하므로 노랑으로 처리
+                } else if (rainLast24h) {
+                    signalClass = "signal-caution";
+                    signalLabel = "초보 주의 / 경계";
+                    signalIcon = "🟡";
+                    guidelineText = "💨 초보자 주의! 최근 강수 영향으로 시야가 흐릴 수 있으니 안전장비를 꼭 착용하세요.";
+
+                // 3단계: 🟢 초록 (최적) - 아래 조건을 모두(AND) 만족할 때만
+                } else {
+                    signalClass = "signal-ok";
+                    signalLabel = "최적 (장판)";
+                    signalIcon = "🟢";
+                    guidelineText = "🍃 스노클링 최적기! 바다가 호수처럼 잔잔하고 시야가 최고조입니다.";
+                }
+
+                windStatus = windSpeed <= 3.0 ? "잔잔한 바람" : (windSpeed < 5.0 ? "약간의 바람" : "강한 바람");
+                waveStatus = waveHeight < 0.3 ? "🏖️ 장판 바다, 시야 최고" : (waveHeight > 0.8 ? "🏄 서핑 파도, 입수 시 너울 위험" : "🌊 파도 있음, 입수 주의");
+            }
+
+            let swellBannerHtml = "";
+            if (!isRestrictedZone && wavePeriod > 8.0) {
+                swellBannerHtml = `
+                    <div class="popup-swell-banner">
+                        ⚠️ 파도는 낮으나 먼바다 너울 유입 중 - 해안가 갯바위 휩쓸림 주의
+                    </div>
+                `;
+            }
+
+            // [수정] 팝업(지도 위 말풍선)에 이름+신호등+설명+가이드라인을 다시 조립
+            let popupContent = `
+                <div class="popup-header">
+                    <span class="popup-title">${name}</span>
+                    <span class="popup-status-group">
+                        <span class="popup-traffic-light">
+                            <span class="tl-dot tl-red ${signalClass === 'signal-danger' ? 'on' : ''}"></span>
+                            <span class="tl-dot tl-yellow ${signalClass === 'signal-caution' ? 'on' : ''}"></span>
+                            <span class="tl-dot tl-green ${signalClass === 'signal-ok' ? 'on' : ''}"></span>
+                        </span>
+                        <span class="popup-signal-badge ${signalClass}">${signalIcon} ${signalLabel}</span>
+                    </span>
+                </div>
+                <div class="popup-desc">${desc || "맑고 아름다운 제주 해안가 명소입니다."}</div>
+            `;
+            if (info) {
+                popupContent += `<span class="popup-info-tag">ℹ️ ${info}</span><br>`;
+            }
+            if (isRestrictedZone) {
+                popupContent += `
+                    <div class="popup-guideline ${signalClass}">
+                        <b>⚓ 선박 운항 구역 안내</b>
+                        이 구역은 선박이 상시 운항하는 항구로, 관련 법령에 따라 일반인의 입수·스노클링·해루질이 금지되어 있습니다. 안전을 위해 지정된 해수욕장/포구를 이용해주세요.
+                    </div>
+                `;
+            } else {
+                popupContent += `
+                    <div class="popup-guideline ${signalClass}">
+                        <b>🤿 스노클링 가이드</b>
+                        ${windStatus} · ${waveStatus}<br>
+                        ${guidelineText}
+                    </div>
+                    ${swellBannerHtml}
+                `;
+            }
+            // [신규] CCTV/드론영상 - 미리 조회해둔 결과(mediaPromise)를 확인해서, 매칭되는 것만 버튼으로 노출
+            const [cctvItems, droneItems] = await mediaPromise;
+            const cctvItem = cctvItems[0] || null;
+            const droneItem = droneItems[0] || null;
+            window.__popupMediaCache = { cctv: cctvItem, drone: droneItem }; // 클릭 시 재조회 없이 바로 렌더링용 캐시
+
+            if (cctvItem || droneItem) {
+                popupContent += `<div class="popup-media-row">`;
+                if (cctvItem) popupContent += `<button class="popup-media-btn" onclick="showCachedMedia('cctv')">📹 실시간 CCTV</button>`;
+                if (droneItem) popupContent += `<button class="popup-media-btn" onclick="showCachedMedia('drone')">🎬 드론·경관 영상</button>`;
+                popupContent += `</div><div id="popup-media-slot"></div>`;
+            }
+            marker.setPopupContent(popupContent);
+
+            // [수정] 하단 패널은 위치 미니 라벨만 갱신 (상세 설명은 팝업이 담당)
+            document.getElementById('p-name-mini').innerText = `📍 ${name}`;
+
+            document.getElementById('w-wind').innerText = isRestrictedZone ? '-' : `${windSpeed} m/s`;
+            document.getElementById('w-wave').innerText = isRestrictedZone ? '-' : `${waveHeight} m`;
+            document.getElementById('w-period').innerText = isRestrictedZone ? '-' : `${wavePeriod} s`;
+
+            const evalBox = document.getElementById('marine-eval');
+
+            if (isRestrictedZone) {
+                evalBox.className = `marine-evaluation eval-danger`;
+                evalBox.innerHTML = `
+                    <div><b>⚓ 안내:</b> 이 구역은 선박 운항 구역으로, 법령상 일반인의 입수·스노클링·해루질이 금지되어 있습니다. 스노클링을 원하시면 지도에서 해수욕장/포구 마커를 이용해주세요.</div>
+                `;
+            } else {
+                let rainStatusFull = rainLast12h ? "🌧️ 최근 12시간 내 강수 있음" : (rainLast24h ? "🌦️ 최근 24시간 내 강수 있음" : "☀️ 최근 24시간 내 강수 없음");
+
+                // [신규] 데이터 출처 라벨 - 어떤 값이 실제로 쓰였는지 투명하게 표시 (하이브리드 우선순위 결과)
+                const SOURCE_LABEL = { khoa: "국립해양조사원(실측)", kma: "기상청 단기예보", beach: "국립해양조사원(공식 해수욕장)", openmeteo: "Open-Meteo(참고값)" };
+                let sourceStatusFull = `바람 ${SOURCE_LABEL[windSource]} · 파고 ${SOURCE_LABEL[waveSource]}`;
+
+                // [수정] 위에서 이미 계산한 신호등 우선순위 판정 결과(signalClass/guidelineText)를 그대로 재사용
+                // - 바람/파고/파주기/강수 임계값을 이 아래에서 다시 계산하면 위 판정과 어긋날 수 있어 통일함
+                let evalClass = signalClass === "signal-danger" ? "eval-danger" : (signalClass === "signal-caution" ? "eval-caution" : "eval-ok");
+                evalBox.className = `marine-evaluation ${evalClass}`;
+                evalBox.innerHTML = `
+                    <div style="margin-bottom: 5px;"><b>강수:</b> ${rainStatusFull}</div>
+                    ${waterTemp !== null ? `<div style="margin-bottom: 5px;"><b>수온:</b> 🌡️ ${waterTemp}°C</div>` : ''}
+                    <div style="margin-top:6px; font-size:11px; opacity:0.7;">📡 데이터 출처: ${sourceStatusFull}</div>
+                `;
+            }
+
+            let tideHtml = "";
+            let lowTideTime = "-";
+
+            try {
+                // [최적화] 위에서 미리 발사해둔 tidePromise 결과를 여기서 받음 (따로 새로 요청 안 함)
+                const response = await tidePromise;
+                if (response && response.ok) {
+                    const parsedData = await response.json();
+                    console.log('[물때 API 원본 응답]', parsedData);
+
+                    // [수정] 새 API는 시간대별 조위값을 연속으로 줌 -> 극대/극소점을 찾아서 고조/저조로 판정
+                    // [수정] 실제 응답에 response 래퍼가 없는 것으로 확인됨 - 두 형태 다 시도
+                    // [수정] items가 {item: [...]} 형태일 수도, items 자체가 바로 배열일 수도 있어서 둘 다 처리
+                    const itemsRaw = parsedData?.body?.items ?? parsedData?.response?.body?.items;
+                    console.log('[물때 API - items 원본]', itemsRaw);
+                    let items = itemsRaw?.item ?? itemsRaw;
+                    if (items && !Array.isArray(items)) items = [items];
+                    if (items && items.length > 0) {
+                        console.log('[물때 API - 첫 항목 구조]', items[0]);
+                    }
+
+                    if (items && items.length > 2) {
+                        // 시간/조위값 후보 필드명들을 순서대로 시도
+                        const readings = items.map(it => {
+                            const timeRaw = it.obsrvnDt || it.reqDate || it.recordTime || it.tm || it.obsTime || it.date_time || '';
+                            const levelRaw = it.tdlvHgt ?? it.bscTdlvHgt ?? it.preTdlv ?? it.obsTdlv ?? it.tideLevel ?? it.tide_level ?? it.value;
+                            return {
+                                time: timeRaw,
+                                level: parseFloat(levelRaw)
+                            };
+                        }).filter(r => !isNaN(r.level));
+
+                        // 시간 형식(YYYYMMDDHHmm 등)에서 시:분만 추출
+                        const formatTime = (t) => {
+                            const s = String(t).replace(/[^0-9]/g, '');
+                            if (s.length >= 12) return s.substring(8, 10) + ':' + s.substring(10, 12);
+                            if (s.length >= 4) return s.substring(0, 2) + ':' + s.substring(2, 4);
+                            return t;
+                        };
+                        // 위와 같은 형식에서 자정 기준 분(minute) 단위 숫자만 추출 (극값 병합 시 시간 간격 계산용)
+                        const timeToMinutes = (t) => {
+                            const s = String(t).replace(/[^0-9]/g, '');
+                            let hh = 0, mm = 0;
+                            if (s.length >= 12) { hh = parseInt(s.substring(8, 10), 10); mm = parseInt(s.substring(10, 12), 10); }
+                            else if (s.length >= 4) { hh = parseInt(s.substring(0, 2), 10); mm = parseInt(s.substring(2, 4), 10); }
+                            return hh * 60 + mm;
+                        };
+
+                        // 1단계: 고조/저조 후보(극대/극소)를 전부 수집
+                        let rawExtrema = [];
+                        readings.forEach((r, i) => {
+                            const prev = readings[i - 1];
+                            const next = readings[i + 1];
+                            let hlLabel = null;
+                            if (prev && next) {
+                                if (r.level >= prev.level && r.level >= next.level) hlLabel = "고조 (만조)";
+                                else if (r.level <= prev.level && r.level <= next.level) hlLabel = "저조 (간조)";
+                            }
+                            if (hlLabel) rawExtrema.push({ label: hlLabel, time: r.time, level: r.level });
+                        });
+
+                        // [수정] 고조/저조 정상 부근에서 10분 간격으로 값이 똑같이 유지되면(평평한 구간)
+                        // 같은 종류의 극값이 연달아 잡히는 문제가 있었음 -> 같은 종류가 2시간 이내로 붙어 있으면
+                        // 더 극단적인(높은 물때는 더 높은, 낮은 물때는 더 낮은) 값 하나로 병합
+                        let extrema = [];
+                        rawExtrema.forEach(cur => {
+                            const last = extrema[extrema.length - 1];
+                            const withinWindow = last && Math.abs(timeToMinutes(cur.time) - timeToMinutes(last.time)) <= 120;
+                            if (last && last.label === cur.label && withinWindow) {
+                                const curIsMoreExtreme = cur.label.startsWith("고조") ? cur.level >= last.level : cur.level <= last.level;
+                                if (curIsMoreExtreme) extrema[extrema.length - 1] = cur;
+                            } else {
+                                extrema.push(cur);
+                            }
+                        });
+
+                        let lowTideArr = [];
+                        extrema.forEach(item => {
+                            const isHigh = item.label.startsWith("고조");
+                            const levelClass = isHigh ? "tide-high" : "tide-low";
+                            const levelStyle = isHigh ? "" : "style='color:#93c5fd; font-weight:bold;'";
+                            const timeOnly = formatTime(item.time);
+
+                            if (!isHigh) lowTideArr.push(timeOnly);
+
+                            tideHtml += `
+                                <tr>
+                                    <td class="${levelClass}">${item.label}</td>
+                                    <td ${levelStyle}>${timeOnly}</td>
+                                    <td>${item.level} cm</td>
+                                </tr>
+                            `;
+                        });
+
+                        lowTideTime = lowTideArr.join(", ") || "-";
+                        if (tideHtml) {
+                            document.getElementById('tide-body').innerHTML = tideHtml;
+                            // [수정] 골든타임 안내를 강수/수온보다 위(맨 위)에 보이도록 marine-eval 박스에 삽입
+                            evalBox.insertAdjacentHTML('afterbegin', `<div style="margin-bottom: 5px;">💡 <b>${targetStation}</b> 물때 연동 중: 저조(간조) 시간인 <b>${lowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.</div>`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("국립해양조사원 실시간 조석 API 호출 실패, Fallback 데이터 적용:", e);
+            }
+
+            if (!tideHtml) {
+                const isSouthSide = lat < 33.34;
+                const defaultLowTideTime = isSouthSide ? "12:05" : "11:34";
+                const defaultHighTideTime = isSouthSide ? "18:12" : "17:45";
+
+                tideHtml = `
+                    <tr>
+                        <td class="tide-high">고조 (만조)</td>
+                        <td>05:25</td>
+                        <td>235 cm</td>
+                    </tr>
+                    <tr>
+                        <td class="tide-low">저조 (간조)</td>
+                        <td style="color:#93c5fd; font-weight:bold;">${defaultLowTideTime}</td>
+                        <td>68 cm</td>
+                    </tr>
+                    <tr>
+                        <td class="tide-high">고조 (만조)</td>
+                        <td>${defaultHighTideTime}</td>
+                        <td>252 cm</td>
+                    </tr>
+                `;
+                document.getElementById('tide-body').innerHTML = tideHtml;
+                evalBox.insertAdjacentHTML('afterbegin', `<div style="margin-bottom: 5px;">💡 <b>${targetStation}</b> 물때 연동 중 (Fallback): 저조(간조) 시간인 <b>${defaultLowTideTime}</b> 기준 앞뒤 2시간이 맑은 시야 및 스노클링 골든타임입니다.</div>`);
+            }
+        }
+
+        window.resetOceanPanel = function() {
+            document.getElementById('panel-content').style.display = 'none';
+            document.getElementById('panel-placeholder').style.display = 'flex';
+        }
+    
+    </script>
+
+    <!-- ===== [신규] 업체 분포 클러스터 지도 스크립트 (기존 지도 변수와 분리된 스코프) ===== -->
+    <script>
+    (function(){
+        /*
+          실서비스 연동 시: 제주도 공공데이터포털 "해양레저스포츠업체 현황"(2022-09-30 기준, 80곳)을
+          그대로 반영했습니다. 각 업체의 status 값이 "영업중"인 것만 지도/목록에 집계됩니다.
+
+          [사용법] 전화 확인 후 폐업/이전이 확인된 업체는 아래에서 해당 업체의
+          status 값을 "영업중" → "폐업" 으로 바꿔주세요. 그 즉시 지도의 숫자와
+          목록에서 자동으로 빠집니다.
+        */
+        const DONG_DATA = [
+            { name:"구좌읍", lat:33.54109, lng:126.82469,
+              businesses:[
+                { name:"서프포인트 하도점", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 하도리 43-1", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"김녕요트투어", type:"요트", addr:"제주특별자치도 제주시 구좌읍 김녕리 4212-1", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"월정퀵서프", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 월정리 33-12", status:"영업중", env:"해변", facility:"단체석+주차장+예약+무료WIFI+화장실+장애인편의시설", safety:"" },
+                { name:"제주웨이브서핑", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 월정리 10", status:"영업중", env:"해변", facility:"단체석+주차장+무료WIFI+화장실", safety:"" },
+                { name:"월정 서프서프", type:"서핑+보드", addr:"제주특별자치도 제주시 구좌읍 월정리 4-1", status:"영업중", env:"해변", facility:"온수샤워실+화장실", safety:"" },
+                { name:"월정서프업", type:"서핑+보드", addr:"제주특별자치도 제주시 구좌읍 월정리 115", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"월정에이스서프", type:"서핑+보드", addr:"제주특별자치도 제주시 구좌읍 월정리 541", status:"영업중", env:"해변", facility:"주차장", safety:"" },
+                { name:"월정파도서핑", type:"서핑+보드", addr:"제주특별자치도 제주시 구좌읍 월정리 13", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"캐럿서프", type:"서핑+보드", addr:"제주특별자치도 제주시 구좌읍 월정리 33", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"월정투명카약", type:"카약", addr:"제주특별자치도 제주시 구좌읍 월정리 1400-33", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"월정바즐서핑앤패들보드", type:"패들보드", addr:"제주특별자치도 제주시 구좌읍 월정리 469-1", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"로로패들보드서핑클럽", type:"패들보드+서핑", addr:"제주특별자치도 제주시 구좌읍 월정리 33", status:"영업중", env:"해변", facility:"주차장+화장실", safety:"" },
+                { name:"스테이지하우스 제주카이트서핑", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 종달리 611", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"빅웨이브서프 하도", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 종달리 1407", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"라인업서프 하도", type:"서핑", addr:"제주특별자치도 제주시 구좌읍 하도리 880-12", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실", safety:"" },
+                { name:"제주카약", type:"카약", addr:"제주특별자치도 제주시 구좌읍 하도리 43-1", status:"영업중", env:"해변", facility:"단체석+주차장+예약+화장실", safety:"" }
+              ]},
+            { name:"애월읍", lat:33.46211, lng:126.32336,
+              businesses:[
+                { name:"새마을서핑운동", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1565-13", status:"영업중", env:"해수욕장", facility:"단체석+주차장+예약+무료WIFI", safety:"약국" },
+                { name:"서프론트", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1613", status:"영업중", env:"해수욕장", facility:"단체석+주차장+화장실", safety:"약국" },
+                { name:"노리터 서핑", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1622-44", status:"영업중", env:"해수욕장", facility:"단체석+주차장+무료WIFI+화장실", safety:"약국" },
+                { name:"서피플서프", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1565-47", status:"영업중", env:"해수욕장", facility:"단체석+주차장+무료WIFI+화장실", safety:"약국" },
+                { name:"제주도서핑샵 문서프", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1635", status:"영업중", env:"해수욕장", facility:"단체석+주차장+무료WIFI+화장실", safety:"약국" },
+                { name:"파인더웨이브", type:"서핑", addr:"제주특별자치도 제주시 애월읍 곽지리 1549-1", status:"영업중", env:"해수욕장", facility:"단체석+주차장+발렛파킹+무료WIFI+화장실", safety:"약국" },
+                { name:"퐁당제주", type:"제트보트", addr:"제주특별자치도 제주시 애월읍 구엄리 607-4", status:"영업중", env:"포구", facility:"주차장+무료WIFI", safety:"구명조끼" },
+                { name:"뉴만석호 체험배낚시", type:"배낚시", addr:"제주특별자치도 제주시 애월읍 애월리 1772-10", status:"영업중", env:"해변", facility:"화장실+무료WIFI", safety:"" },
+                { name:"죠스호 애월배낚시", type:"배낚시", addr:"제주특별자치도 제주시 애월읍 애월리 407-4", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"제낚사", type:"배낚시", addr:"제주특별자치도 제주시 애월읍 애월리 407-4", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"머맨", type:"스킨스쿠버", addr:"제주특별자치도 제주시 애월읍 애월리 407-4", status:"영업중", env:"해변", facility:"화장실+무료WIFI", safety:"" },
+                { name:"애월스쿠버다이빙스쿨", type:"스킨스쿠버", addr:"제주특별자치도 제주시 애월읍 애월리 1737-6", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"제주해남디이브센터", type:"스킨스쿠버", addr:"제주특별자치도 제주시 애월읍 애월리 1676-2 2층", status:"영업중", env:"해변", facility:"화장실+무료WIFI+장애인편의시설", safety:"" },
+                { name:"제주 카약올레", type:"카약", addr:"제주특별자치도 제주시 애월읍 애월리 2490-1", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"청아투명카약", type:"카약", addr:"제주특별자치도 제주시 애월읍 애월리 2467", status:"영업중", env:"해변", facility:"화장실", safety:"" },
+                { name:"도시해녀", type:"해녀체험", addr:"제주특별자치도 제주시 애월읍 하귀2리 1670-1", status:"영업중", env:"해변", facility:"무료WIFI", safety:"" }
+              ]},
+            { name:"한림읍", lat:33.40819, lng:126.25221,
+              businesses:[
+                { name:"귀덕바다투명카약", type:"카약", addr:"제주특별자치도 제주시 한림읍 귀덕리 1031-1", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"레드서브마린", type:"스노클링+해녀체험+다이빙", addr:"제주특별자치도 제주시 한림읍 귀덕리 3962-1", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"잠수교육연구협회", type:"스노클링+해녀체험+다이빙", addr:"제주특별자치도 제주시 한림읍 귀덕리 4110-2", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"선인장서프 금능", type:"서핑+패들보트", addr:"제주특별자치도 제주시 한림읍 금능리 1462", status:"영업중", env:"해변", facility:"샤워실+주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"수중산책", type:"스킨스쿠버", addr:"제주특별자치도 제주시 한림읍 금능리 1453-3", status:"영업중", env:"해변", facility:"샤워실+주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"테우마을 수원리 농어촌체험마을", type:"스쿠버다이빙", addr:"제주특별자치도 제주시 한림읍 수원리 724-2", status:"영업중", env:"포구", facility:"주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"제주프리다이빙 이너피스", type:"스킨스쿠버", addr:"제주특별자치도 제주시 한림읍 옹포리 801", status:"영업중", env:"포구", facility:"주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"제주빡빡이 스쿠버", type:"스쿠버다이빙+스노클링", addr:"제주특별자치도 제주시 한림읍 월령리 317", status:"영업중", env:"포구", facility:"주차장+화장실+샤워실", safety:"구명조끼+비상약품" },
+                { name:"제주협재서프", type:"서핑+윈드서핑", addr:"제주특별자치도 제주시 한림읍 협재리 2447-3", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"루트서프", type:"서핑+윈드서핑", addr:"제주특별자치도 제주시 한림읍 협재리 2447", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" },
+                { name:"협재랜드", type:"해양레저", addr:"제주특별자치도 제주시 한림읍 협재리 1677", status:"영업중", env:"", facility:"샤워실+공용주차장+화장실", safety:"구명조끼+비상약품" }
+              ]},
+            { name:"성산읍", lat:33.45116, lng:126.91993,
+              businesses:[
+                { name:"플레이스캠프제주", type:"스쿠버다이빙", addr:"제주특별자치도 서귀포시 성산읍 고성리 297-1", status:"영업중", env:"해변", facility:"주차장+화장실+무선WIFI", safety:"" },
+                { name:"오조리레저파크", type:"요트", addr:"제주특별자치도 서귀포시 성산읍 고성리 275-2", status:"영업중", env:"바다", facility:"화장실", safety:"" },
+                { name:"월드제트보트", type:"제트보트", addr:"제주특별자치도 서귀포시 성산읍 성산리 347-9", status:"영업중", env:"바다", facility:"마트+주차장+화장실", safety:"" },
+                { name:"나잠다이브", type:"다이빙", addr:"제주특별자치도 서귀포시 성산읍 시흥리 11-6", status:"영업중", env:"바다", facility:"화장실+주차장+무료WIFI", safety:"" },
+                { name:"레저에 빠지다", type:"서핑", addr:"제주특별자치도 서귀포시 성산읍 시흥리 1183-7 1층", status:"영업중", env:"바다", facility:"화장실+주차장+무료WIFI", safety:"" },
+                { name:"온앤온서프", type:"서핑", addr:"제주특별자치도 서귀포시 성산읍 고성리 186-1", status:"영업중", env:"해변", facility:"주차장", safety:"" },
+                { name:"장도민 카이트서핑", type:"서핑", addr:"제주특별자치도 서귀포시 성산읍 고성리 224-13", status:"영업중", env:"해변", facility:"주차장", safety:"" },
+                { name:"제주쥬티클럽", type:"서핑", addr:"제주특별자치도 서귀포시 성산읍 고성리 206-7", status:"영업중", env:"해변", facility:"주차장+무료WIFI+화장실+샤워시설", safety:"" },
+                { name:"휘닉스 제주 섭지코지수영장", type:"수영장", addr:"제주특별자치도 서귀포시 성산읍 고성리 127-2", status:"영업중", env:"바다+리조트", facility:"화장실+샤워시설+카페", safety:"" },
+                { name:"섭지스쿠버", type:"스킨스쿠버", addr:"제주특별자치도 서귀포시 성산읍 고성리 559-28", status:"영업중", env:"해변", facility:"주차장+화장실", safety:"" }
+              ]},
+            { name:"한경면", lat:33.34443, lng:126.18191,
+              businesses:[
+                { name:"두모리에 피싱샵", type:"낚시", addr:"제주특별자치도 제주시 한경면 두모리 2611", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"조브라더스윈드서핑", type:"윈드서핑", addr:"제주특별자치도 제주시 한경면 두모리 2617-1", status:"영업중", env:"방파제", facility:"화장실+쓰레기통", safety:"구명부환+소화기+구급약품" },
+                { name:"포시즌호", type:"배낚시", addr:"제주특별자치도 제주시 한경면 신창리 348-8 포시즌호", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"팬더레저체험낚시", type:"배낚시", addr:"제주특별자치도 제주시 한경면 신창리 1455-4", status:"영업중", env:"방파제", facility:"화장실", safety:"구급약품" },
+                { name:"히트마시호", type:"배낚시", addr:"제주특별자치도 제주시 한경면 신창리 348-13", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"제주바다목장 다이브리조트", type:"스킨스쿠버", addr:"제주특별자치도 제주시 한경면 한경면 신창리 542-9", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"스타다이브코리아", type:"스쿠버다이빙", addr:"제주특별자치도 제주시 한경면 용수리 2299", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"제주 차귀도요트투어", type:"요트", addr:"제주특별자치도 제주시 한경면 용수리 4240", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"IGH오션레포츠", type:"스노쿨링+패들보드", addr:"제주특별자치도 제주시 한경면 판포리 2850-12", status:"영업중", env:"", facility:"공용주차장", safety:"" },
+                { name:"블루웨이프리다이브", type:"프리다이빙", addr:"제주특별자치도 제주시 한경면 두모리 1408", status:"영업중", env:"", facility:"", safety:"" }
+              ]},
+            { name:"대정읍", lat:33.20917, lng:126.26238,
+              businesses:[
+                { name:"제주스쿠바아로파", type:"다이빙", addr:"제주특별자치도 서귀포시 대정읍 상모리 1670-3", status:"영업중", env:"바다", facility:"", safety:"" },
+                { name:"스쿠버아카데미", type:"스쿠버다이빙", addr:"제주특별자치도 서귀포시 대정읍 하모리 584-7", status:"영업중", env:"바다", facility:"화장실+쓰레기통+샤워시설", safety:"" },
+                { name:"케이제주씨워킹", type:"씨워킹+돌고래투어+패들보드+카약+스노클링+제트스키", addr:"제주특별자치도 서귀포시 대정읍 하모리 646-20", status:"영업중", env:"방파제", facility:"화장실+쓰레기통", safety:"" },
+                { name:"M1971 요트투어", type:"요트", addr:"제주특별자치도 서귀포시 대정읍 하모리 646-20", status:"영업중", env:"방파제", facility:"화장실+쓰레기통", safety:"" }
+              ]},
+            { name:"조천읍", lat:33.54389, lng:126.66557,
+              businesses:[
+                { name:"진주프다", type:"프리다이빙", addr:"제주특별자치도 제주시 조천읍 북촌리 2114-7", status:"영업중", env:"해수욕장", facility:"샤워장+화장실+쓰레기통", safety:"소화기+구명조끼+구급약품" },
+                { name:"함덕 돌핀레저", type:"제트보트+제트스키+바나나보트+플라잉피쉬+밴드웨곤+와플보트+스노쿨링+씨워킹+스피드보트", addr:"제주특별자치도 제주시 조천읍 함덕리 1008", status:"영업중", env:"해수욕장", facility:"샤워장+화장실+쓰레기통", safety:"소화기+구명조끼+구급약품" },
+                { name:"함덕스쿠버 다이빙", type:"체험 다이빙+스노쿨링+패들보드", addr:"제주특별자치도 제주시 조천읍 함덕리 3297", status:"영업중", env:"해수욕장", facility:"샤워장+화장실+쓰레기통", safety:"소화기+구명조끼+구급약품" },
+                { name:"우리동네 잠수하는 형들", type:"체험 스쿠버 다이빙+PADI 자격증 코스", addr:"제주특별자치도 제주시 조천읍 함덕리 3297", status:"영업중", env:"해수욕장", facility:"샤워장+화장실+쓰레기통", safety:"소화기+구명조끼+구급약품" }
+              ]},
+            { name:"표선면", lat:33.3273, lng:126.84041,
+              businesses:[
+                { name:"서프포인트 표선점", type:"서핑", addr:"제주특별자치도 서귀포시 표선면 표선리 820-1", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"제주표선 서핑캠퍼", type:"서핑", addr:"제주특별자치도 서귀포시 표선면 표선리 856", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"제주와따해양레저", type:"슈퍼맨+바나나보트+와플팡팡+땅콩보트+밴드웨곤+플라이피쉬+디스코팡팡+제트스키+스피드보트+스노클링+수상스키+의자팡팡+봉봉", addr:"제주특별자치도 서귀포시 표선면 표선리 45-5", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"아키아서핑스쿨", type:"서핑", addr:"제주특별자치도 서귀포시 표선면 하천리 94-2", status:"영업중", env:"", facility:"", safety:"" }
+              ]},
+            { name:"우도면", lat:33.49995, lng:126.95614,
+              businesses:[
+                { name:"우도다이브", type:"스킨스쿠버", addr:"제주특별자치도 제주시 우도면 연평리 290-10", status:"영업중", env:"해변", facility:"", safety:"" },
+                { name:"우도올레보트", type:"제트보트", addr:"제주특별자치도 제주시 우도면 연평리 2615-2", status:"영업중", env:"해변", facility:"", safety:"" }
+              ]},
+            { name:"하효동", lat:33.25199, lng:126.62184,
+              businesses:[
+                { name:"쇠소깍제트보트", type:"제트보트", addr:"제주특별자치도 서귀포시 하효동 999", status:"영업중", env:"", facility:"", safety:"" },
+                { name:"쇠소깍수상레저 전통테우", type:"테우+카약", addr:"제주특별자치도 서귀포시 하효동 990-1", status:"영업중", env:"", facility:"", safety:"" }
+              ]},
+            { name:"남원읍", lat:33.27498, lng:126.66017,
+              businesses:[
+                { name:"프리다이브아시아", type:"프리다이빙", addr:"제주특별자치도 서귀포시 남원읍 위미리 2860", status:"영업중", env:"", facility:"", safety:"" }
+              ]},
+        ];
+
+        function activePBiz(dong){
+            return dong.businesses.filter(b => b.status === '영업중');
+        }
+
+        const clusterMap = L.map('cluster-map', {
+            zoomControl:false,
+            attributionControl:false,
+            scrollWheelZoom:false,
+            minZoom:9,
+            maxZoom:16,
+            maxBoundsViscosity:1.0
+        }).setView([33.38, 126.55], 10);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom:18
+        }).addTo(clusterMap);
+        L.control.zoom({ position:'bottomright' }).addTo(clusterMap);
+
+        // [신규] 제주도 밖으로 빠지지 않도록 경계 고정 (세계지도로 축소되는 문제 방지)
+        const jejuBounds = L.latLngBounds([33.05, 125.95], [33.65, 127.05]);
+        clusterMap.setMaxBounds(jejuBounds);
+
+        // [신규] 스크롤하면 지도가 확대되어 페이지가 안 내려가는 문제 방지:
+        // 지도를 클릭해야 스크롤 확대가 켜지고, 마우스가 지도를 벗어나면 다시 꺼짐
+        const clusterMapShellEl = document.querySelector('.partner-map-shell');
+        const clusterScrollHint = document.getElementById('cluster-scroll-hint');
+        clusterMap.on('click', () => {
+            clusterMap.scrollWheelZoom.enable();
+            if (clusterScrollHint) clusterScrollHint.classList.add('hide');
+        });
+        if (clusterMapShellEl){
+            clusterMapShellEl.addEventListener('mouseleave', () => {
+                clusterMap.scrollWheelZoom.disable();
+            });
+        }
+
+        const pActiveCounts = DONG_DATA.map(d => activePBiz(d).length);
+        const maxCount = Math.max(...pActiveCounts, 1);
+        const totalCount = pActiveCounts.reduce((s,c) => s + c, 0);
+        document.getElementById('p-legend-total').textContent = totalCount;
+        document.getElementById('p-legend-dong-count').textContent = DONG_DATA.filter((d,i) => pActiveCounts[i] > 0).length;
+
+        function tierOf(count){
+            if (count >= 15) return 'large';
+            if (count >= 5) return 'medium';
+            return 'small';
+        }
+
+        // [신규] 클러스터 원이 해안가 항구 아이콘과 겹치지 않도록, 섬 중심(한라산) 방향으로
+        // 살짝 당겨서 표시합니다. 바텀시트에 쓰이는 실제 위치(d.lat/d.lng)는 그대로 둡니다.
+        const P_ISLAND_CENTER = { lat:33.362, lng:126.530 };
+        function pInlandPos(lat, lng, factor = 0.25){
+            return [ lat + (P_ISLAND_CENTER.lat - lat) * factor, lng + (P_ISLAND_CENTER.lng - lng) * factor ];
+        }
+
+        DONG_DATA.forEach(d => {
+            const count = activePBiz(d).length;
+            if (count === 0) return;
+            const size = Math.round(18 + Math.sqrt(count) * 4.6);
+            const opacity = (0.42 + (count / maxCount) * 0.43).toFixed(2);
+            const tier = tierOf(count);
+            const icon = L.divIcon({
+                className:'p-cluster-icon',
+                html:`<div class="p-cluster-circle p-tier-${tier}" style="width:${size}px;height:${size}px;opacity:${opacity};font-size:${Math.max(11, size*0.34)}px;">${count}<div class="p-cluster-label">${d.name}</div></div>`,
+                iconSize:[size, size],
+                iconAnchor:[size/2, size/2]
+            });
+            const marker = L.marker(pInlandPos(d.lat, d.lng), { icon }).addTo(clusterMap);
+            marker.on('click', () => openPSheet(d));
+        });
+
+        /*
+          [참고용 경계선] 제주시 · 서귀포시 행정구역 경계를 정밀하게 그린 것이 아니라
+          한라산을 기준으로 대략적인 위치만 표시하는 약도입니다. 정확한 경계가 필요하면
+          공식 행정구역 경계 데이터(국가공간정보포털 등)로 교체해주세요.
+        */
+        const pBoundaryLine = L.polyline([
+            [33.312, 126.216],
+            [33.345, 126.360],
+            [33.3617, 126.5297],
+            [33.400, 126.680],
+            [33.430, 126.850]
+        ], { color:'#F7F4EC', weight:2, opacity:0.35, dashArray:'6 6' }).addTo(clusterMap);
+
+        L.marker([33.475, 126.53], {
+            icon: L.divIcon({ className:'', html:'<div class="p-boundary-label">제주시</div>', iconSize:[0,0] })
+        }).addTo(clusterMap);
+        L.marker([33.245, 126.55], {
+            icon: L.divIcon({ className:'', html:'<div class="p-boundary-label">서귀포시</div>', iconSize:[0,0] })
+        }).addTo(clusterMap);
+
+        /*
+          [참고 지점] 제주공항·국제여객선터미널·주요 다이빙 출항 항구.
+          실제 좌표로 더 정밀하게 다듬고 싶으면 위경도만 교체하면 됩니다.
+        */
+        const P_REF_POINTS = [
+            { name:"제주국제공항", lat:33.5070, lng:126.4930, icon:"✈️", cat:"transit" },
+            { name:"제주항 국제여객선터미널", lat:33.5289, lng:126.5218, icon:"🚢", cat:"transit" },
+            { name:"성산항", lat:33.4636, lng:126.9276, icon:"⚓", cat:"harbor" },
+            { name:"보목항", lat:33.2377, lng:126.5983, icon:"⚓", cat:"harbor" },
+            { name:"강정항", lat:33.2320, lng:126.4910, icon:"⚓", cat:"harbor" },
+            { name:"서귀포항", lat:33.2400, lng:126.5650, icon:"⚓", cat:"harbor" },
+            { name:"법환항", lat:33.2420, lng:126.5280, icon:"⚓", cat:"harbor" },
+            { name:"신창항", lat:33.3216, lng:126.1740, icon:"⚓", cat:"harbor" },
+            { name:"애월항", lat:33.4665, lng:126.3225, icon:"⚓", cat:"harbor" }
+        ];
+
+        P_REF_POINTS.forEach(p => {
+            const icon = L.divIcon({
+                className:'p-ref-icon',
+                html:`<div class="p-ref-marker ${p.cat==='harbor'?'harbor':''}">${p.icon}<div class="p-ref-label">${p.name}</div></div>`,
+                iconSize:[26,26],
+                iconAnchor:[13,13]
+            });
+            L.marker([p.lat, p.lng], { icon }).addTo(clusterMap);
+        });
+
+        const pSheet = document.getElementById('p-sheet');
+        const pBackdrop = document.getElementById('p-backdrop');
+
+        function pStatusChip(status){
+            if (status === '영업중') return `<span class="p-status-chip active">영업중</span>`;
+            if (status === '폐업') return `<span class="p-status-chip closed">폐업</span>`;
+            return `<span class="p-status-chip unknown">${status || '확인필요'}</span>`;
+        }
+
+        function pTagRow(str, cls){
+            if (!str) return '';
+            return `<div class="p-tag-row">${str.split('+').map(t=>`<span class="${cls}">${t}</span>`).join('')}</div>`;
+        }
+
+        function openPSheet(dong){
+            const list = document.getElementById('p-sheet-list');
+            const shown = activePBiz(dong);
+
+            document.getElementById('p-sheet-title').textContent = dong.name;
+            document.getElementById('p-sheet-sub').textContent = `공공데이터 기준 영업중 ${shown.length}개 · 출처: 공공데이터포털(2022-09-30) · 전화 확인 후 상태가 갱신됩니다`;
+
+            list.innerHTML = shown.length ? shown.map(b => `
+                <div class="p-biz-item">
+                  ${pStatusChip(b.status)}
+                  <div class="p-biz-info">
+                    <div class="p-name">${b.name}</div>
+                    <div class="p-meta"><span class="p-biz-type-tag">${b.type}</span>${b.env ? ` · ${b.env}` : ''}</div>
+                    <div class="p-addr">${b.addr}</div>
+                    ${b.safety ? pTagRow(b.safety, 'p-safety-tag') : '<div class="p-no-safety">⚠ 안전시설 정보 없음 - 확인 필요</div>'}
+                    ${pTagRow(b.facility, 'p-facility-tag')}
+                  </div>
+                </div>`).join('') : `<div class="p-biz-empty">확인된 영업중 업체가 없습니다.</div>`;
+
+            pSheet.classList.add('open');
+            pBackdrop.classList.add('show');
+        }
+
+        function closePSheet(){
+            pSheet.classList.remove('open');
+            pBackdrop.classList.remove('show');
+        }
+
+        document.getElementById('p-sheet-close').addEventListener('click', closePSheet);
+        pBackdrop.addEventListener('click', closePSheet);
+
+        let pDragStartY = null;
+        const pHandle = document.getElementById('p-sheet-handle');
+        pHandle.addEventListener('pointerdown', e => { pDragStartY = e.clientY; pSheet.style.transition = 'none'; });
+        window.addEventListener('pointermove', e => {
+            if (pDragStartY === null) return;
+            const dy = Math.max(0, e.clientY - pDragStartY);
+            pSheet.style.transform = `translateY(${dy}px)`;
+        });
+        window.addEventListener('pointerup', e => {
+            if (pDragStartY === null) return;
+            const dy = e.clientY - pDragStartY;
+            pSheet.style.transition = '';
+            pSheet.style.transform = '';
+            if (dy > 90) closePSheet();
+            pDragStartY = null;
+        });
+
+    })();
+    </script>
+</body>
+</html>
