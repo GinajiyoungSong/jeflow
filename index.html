@@ -1795,7 +1795,7 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                 }
 
                 windStatus = windSpeed <= 3.0 ? "잔잔한 바람" : (windSpeed < 5.0 ? "약간의 바람" : "강한 바람");
-                waveStatus = waveHeight <= 0.5 ? "장판 바다, 시야 최고" : (waveHeight >= 0.7 ? "높은 파도, 입수 주의" : "일반 파도 수준");
+                waveStatus = waveHeight <= 0.3 ? "장판 바다, 시야 최고" : (waveHeight >= 0.8 ? "높은 파도, 입수 주의" : "일반 파도 수준");
             }
 
             let swellBannerHtml = "";
