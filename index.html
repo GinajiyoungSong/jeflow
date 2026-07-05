@@ -1795,7 +1795,7 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                 }
 
                 windStatus = windSpeed <= 3.0 ? "잔잔한 바람" : (windSpeed < 5.0 ? "약간의 바람" : "강한 바람");
-                waveStatus = waveHeight <= 0.3 ? "장판 바다, 시야 최고" : (waveHeight >= 0.8 ? "높은 파도, 입수 주의" : "일반 파도 수준");
+                waveStatus = waveHeight <= 0.3 ? "장판 바다, 시야 최고" : (waveHeight >= 0.8 ? "파도 있음, 입수 주의" : "일반 파도 수준");
             }
 
             let swellBannerHtml = "";
@@ -1872,7 +1872,7 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                 `;
             } else {
                 let windStatusFull = windSpeed <= 3.0 ? "🍃 잔잔한 바람 (스노클링 최적)" : (windSpeed < 5.0 ? "💨 약간의 바람 (초보자 주의)" : "⚠️ 강한 바람 (물놀이 비추천 / 서핑 추천)");
-                let waveStatusFull = waveHeight <= 0.5 ? "🌊 장판 바다 (스노클링 최적, 시야 최고)" : (waveHeight >= 0.7 ? "⚠️ 높은 파도 (초보 입수 금지)" : "🏄 일반 파도 수준 (안전장비 지참)");
+                let waveStatusFull = waveHeight <= 0.3 ? "🌊 장판 바다 (스노클링 최적, 시야 최고)" : (waveHeight >= 0.8 ? "⚠️ 높은 파도 (초보 입수 금지)" : "🏄 파도 있음 (안전장비 지참)");
                 let rainStatusFull = rainLast12h ? "🌧️ 최근 12시간 내 강수 있음" : (rainLast24h ? "🌦️ 최근 24시간 내 강수 있음" : "☀️ 최근 24시간 내 강수 없음");
 
                 // [신규] 데이터 출처 라벨 - 어떤 값이 실제로 쓰였는지 투명하게 표시 (하이브리드 우선순위 결과)
