@@ -145,17 +145,6 @@
         .ww-row.ww-alert {
             animation: ww-blink 1.1s ease-in-out infinite;
         }
-        .ww-row-detail {
-            flex: 1 1 100%;
-            background: #0f172a;
-            color: #fca5a5;
-            font-size: 12px;
-            line-height: 1.6;
-            padding: 10px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-        .ww-row-detail.none { color: #64748b; }
-
         @media (min-width: 900px) {
             .ww-row { font-size: 20px; }
         }
@@ -543,25 +532,23 @@
         <div class="mode-btn active" id="mode-beach" data-mode="beach">해수욕장·포구</div>
     </div>
 
-    <!-- [수정] 기상특보/태풍정보 리스트 - 모드배너 바로 아래, 물때앱 스타일의 클릭형 리스트 -->
+    <!-- [수정] 기상특보/태풍정보 - 클릭 시 각 상세페이지로 이동 (펼치기 아님) -->
     <div id="weather-warning-list">
-        <div class="ww-row" id="ww-warning-row">
+        <div class="ww-row" id="ww-warning-row" data-href="warning-detail.html">
             <span class="ww-row-label">
                 <span id="ww-warning-dot" class="ww-dot"></span> 특보발효중
                 <span id="ww-warning-summary" class="ww-summary"></span>
             </span>
             <span class="ww-row-arrow">▶</span>
         </div>
-        <div class="ww-row-detail" id="ww-warning-detail" style="display:none;"></div>
 
-        <div class="ww-row" id="ww-typhoon-row">
+        <div class="ww-row" id="ww-typhoon-row" data-href="typhoon-detail.html">
             <span class="ww-row-label">
                 <span id="ww-typhoon-dot" class="ww-dot"></span> 태풍정보
                 <span id="ww-typhoon-summary" class="ww-summary"></span>
             </span>
             <span class="ww-row-arrow">▶</span>
         </div>
-        <div class="ww-row-detail" id="ww-typhoon-detail" style="display:none;"></div>
     </div>
 
     <!-- [신규] 스노클링 모드 전용 필터바 - 기본은 숨김, 스노클링 모드 선택 시에만 표시 -->
@@ -705,13 +692,24 @@
 
             // [신규] 지도 미세조정 도구 - 주소 끝에 ?calibrate=1 붙이면 활성화
             // 그림지도(jejuisland.jpeg) 모서리 3곳을 드래그해서 좌표를 눈으로 맞출 수 있음
+            // + 회전 슬라이더로 각도만 따로 직접 조정 가능
             if (new URLSearchParams(window.location.search).get('calibrate') === '1') {
                 const calibInfoBox = L.control({ position: 'topleft' });
                 calibInfoBox.onAdd = function() {
                     const div = L.DomUtil.create('div');
                     div.id = 'calib-info-box';
                     div.style.cssText = 'background:#0f172a; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:11px; font-family:monospace; line-height:1.6; max-width:320px; box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-                    div.innerHTML = '🛠️ 미세조정 모드 - 마커를 드래그해서 위치를 맞추세요';
+                    // [신규] 회전 슬라이더 (-45도 ~ +45도, 0.1도 단위)
+                    div.innerHTML = `
+                        🛠️ 미세조정 모드 - 마커를 드래그해서 위치를 맞추세요<br><br>
+                        🔄 <b>회전 조정: <span id="calib-rotate-val">0.0</span>°</b><br>
+                        <input type="range" id="calib-rotate-slider" min="-45" max="45" step="0.1" value="0" style="width:100%; margin-top:4px;">
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <button id="calib-rotate-reset" style="flex:1; font-family:inherit; font-size:11px; padding:4px; cursor:pointer;">회전 초기화</button>
+                            <button id="calib-set-base" style="flex:1; font-family:inherit; font-size:11px; padding:4px; cursor:pointer;">현재 위치를 기준점으로</button>
+                        </div>
+                        <div id="calib-coord-output" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.2); padding-top:8px;"></div>
+                    `;
                     return div;
                 };
                 calibInfoBox.addTo(map);
@@ -720,8 +718,8 @@
                     const tl = calibTopleft.getLatLng();
                     const tr = calibTopright.getLatLng();
                     const bl = calibBottomleft.getLatLng();
-                    document.getElementById('calib-info-box').innerHTML = `
-                        🛠️ <b>미세조정 모드</b> (아래 값을 코드에 복사하세요)<br><br>
+                    document.getElementById('calib-coord-output').innerHTML = `
+                        (아래 값을 코드에 복사하세요)<br>
                         const topleft&nbsp;&nbsp;&nbsp;= L.latLng(${tl.lat.toFixed(4)}, ${tl.lng.toFixed(4)});<br>
                         const topright&nbsp;&nbsp;= L.latLng(${tr.lat.toFixed(4)}, ${tr.lng.toFixed(4)});<br>
                         const bottomleft = L.latLng(${bl.lat.toFixed(4)}, ${bl.lng.toFixed(4)});
@@ -740,12 +738,82 @@
                 const calibBottomleft = L.marker(bottomleft, { draggable: true, icon: calibIconStyle('#3b82f6') })
                     .bindTooltip('BL (좌하단)', { permanent: true, direction: 'top' }).addTo(map);
 
+                // [신규] 회전 계산의 기준이 되는 "기준 좌표" - 드래그하거나 "기준점으로 설정"을 누르면 갱신됨
+                let calibBase = {
+                    tl: calibTopleft.getLatLng(),
+                    tr: calibTopright.getLatLng(),
+                    bl: calibBottomleft.getLatLng()
+                };
+
+                // [신규] 기준 좌표를 중심점 기준으로 angle(도)만큼 회전시킨 좌표 계산
+                // (경도를 x, 위도를 y로 취급하는 근사 회전 - 제주 정도 규모의 소지역에서는 시각적으로 충분히 맞음)
+                function rotatePoint(point, center, angleDeg) {
+                    const rad = angleDeg * Math.PI / 180;
+                    const dx = point.lng - center.lng;
+                    const dy = point.lat - center.lat;
+                    return L.latLng(
+                        center.lat + (dx * Math.sin(rad) + dy * Math.cos(rad)),
+                        center.lng + (dx * Math.cos(rad) - dy * Math.sin(rad))
+                    );
+                }
+
+                function applyRotation(angleDeg) {
+                    // 중심점 = topright와 bottomleft의 중점 (평행사변형 특성 이용)
+                    const center = L.latLng(
+                        (calibBase.tr.lat + calibBase.bl.lat) / 2,
+                        (calibBase.tr.lng + calibBase.bl.lng) / 2
+                    );
+                    const newTl = rotatePoint(calibBase.tl, center, angleDeg);
+                    const newTr = rotatePoint(calibBase.tr, center, angleDeg);
+                    const newBl = rotatePoint(calibBase.bl, center, angleDeg);
+
+                    calibTopleft.setLatLng(newTl);
+                    calibTopright.setLatLng(newTr);
+                    calibBottomleft.setLatLng(newBl);
+                    illustOverlay.reposition(newTl, newTr, newBl);
+                    updateCalibInfo();
+                }
+
                 [calibTopleft, calibTopright, calibBottomleft].forEach(m => {
                     m.on('drag', () => {
                         illustOverlay.reposition(calibTopleft.getLatLng(), calibTopright.getLatLng(), calibBottomleft.getLatLng());
                         updateCalibInfo();
                     });
+                    // 드래그를 마치면, 그 위치를 새로운 회전 기준점으로 갱신하고 슬라이더는 0으로 리셋
+                    m.on('dragend', () => {
+                        calibBase = {
+                            tl: calibTopleft.getLatLng(),
+                            tr: calibTopright.getLatLng(),
+                            bl: calibBottomleft.getLatLng()
+                        };
+                        document.getElementById('calib-rotate-slider').value = 0;
+                        document.getElementById('calib-rotate-val').innerText = '0.0';
+                    });
                 });
+
+                // [신규] 회전 슬라이더 이벤트
+                document.getElementById('calib-rotate-slider').addEventListener('input', function() {
+                    const angle = parseFloat(this.value);
+                    document.getElementById('calib-rotate-val').innerText = angle.toFixed(1);
+                    applyRotation(angle);
+                });
+                // [신규] 회전 초기화 버튼 - 슬라이더를 0으로, 기준 좌표 그대로 복원
+                document.getElementById('calib-rotate-reset').addEventListener('click', function() {
+                    document.getElementById('calib-rotate-slider').value = 0;
+                    document.getElementById('calib-rotate-val').innerText = '0.0';
+                    applyRotation(0);
+                });
+                // [신규] "현재 위치를 기준점으로" 버튼 - 지금 마커 위치를 새 회전 기준으로 고정 (드래그와 동일 효과)
+                document.getElementById('calib-set-base').addEventListener('click', function() {
+                    calibBase = {
+                        tl: calibTopleft.getLatLng(),
+                        tr: calibTopright.getLatLng(),
+                        bl: calibBottomleft.getLatLng()
+                    };
+                    document.getElementById('calib-rotate-slider').value = 0;
+                    document.getElementById('calib-rotate-val').innerText = '0.0';
+                });
+
                 updateCalibInfo();
             }
 
@@ -1097,7 +1165,6 @@
             const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
             const warningUrl = `${appsScriptProxyUrl}?action=warning`;
 
-            const warningDetailEl = document.getElementById('ww-warning-detail');
             const warningDotEl = document.getElementById('ww-warning-dot');
             const warningSummaryEl = document.getElementById('ww-warning-summary');
 
@@ -1124,21 +1191,15 @@
 
                 if (jejuLines.length > 0) {
                     warningDotEl.classList.add('on');
-                    warningDetailEl.innerHTML = jejuLines.join('<br>');
-                    warningDetailEl.classList.remove('none');
                     warningSummaryEl.innerText = `- ${jejuLines.map(extractWarnName).join(', ')}`;
                     document.getElementById('ww-warning-row').classList.add('ww-alert'); // [신규] 깜빡임 시작
                 } else {
                     warningDotEl.classList.remove('on');
-                    warningDetailEl.innerHTML = '현재 제주 지역에 발효중인 특보가 없습니다.';
-                    warningDetailEl.classList.add('none');
                     warningSummaryEl.innerText = '';
                     document.getElementById('ww-warning-row').classList.remove('ww-alert');
                 }
             } catch (err) {
                 console.error('기상특보 조회 실패:', err);
-                warningDetailEl.innerHTML = '특보 정보를 불러오지 못했습니다.';
-                warningDetailEl.classList.add('none');
             }
         }
 
@@ -1148,7 +1209,6 @@
             const appsScriptProxyUrl = "https://script.google.com/macros/s/AKfycbxsFQE8atcqCH7mO8U8jM_sjRHW-Zulsh1JF_Ehpf7jL6q7SCxJPkmZWoHDYfLAIyYB/exec";
             const typhoonUrl = `${appsScriptProxyUrl}?action=typhoon`;
 
-            const typhoonDetailEl = document.getElementById('ww-typhoon-detail');
             const typhoonDotEl = document.getElementById('ww-typhoon-dot');
             const typhoonSummaryEl = document.getElementById('ww-typhoon-summary');
 
@@ -1163,8 +1223,6 @@
 
                 if (!items || items.length === 0) {
                     typhoonDotEl.classList.remove('on');
-                    typhoonDetailEl.innerHTML = '현재 발효중인 태풍이 없습니다.';
-                    typhoonDetailEl.classList.add('none');
                     typhoonSummaryEl.innerText = '';
                     return;
                 }
@@ -1172,35 +1230,18 @@
                 const t = items[0];
                 typhoonDotEl.classList.add('on');
                 typhoonSummaryEl.innerText = `- 제${t.typSeq}호 ${t.typName}(${t.typEn})`;
-                typhoonDetailEl.classList.remove('none');
-                typhoonDetailEl.innerHTML = `
-                    <b>제${t.typSeq}호 태풍 ${t.typName}(${t.typEn})</b><br>
-                    위치: ${t.typLoc || '-'}<br>
-                    중심기압: ${t.typPs || '-'} hPa · 최대풍속: ${t.typWs || '-'} m/s<br>
-                    진행방향: ${t.typDir || '-'} · 이동속도: ${t.typSp || '-'} km/h
-                    ${t.img ? `<br><img src="${t.img}" style="max-width:100%; margin-top:8px; border-radius:6px;">` : ''}
-                `;
             } catch (err) {
                 console.error('태풍정보 조회 실패:', err);
-                typhoonDetailEl.innerHTML = '태풍 정보를 불러오지 못했습니다.';
-                typhoonDetailEl.classList.add('none');
             }
         }
 
-        // [신규] 특보발효중/태풍정보 행 클릭 시 상세 내용 펼치기/접기
-        document.getElementById('ww-warning-row').addEventListener('click', function() {
-            const detail = document.getElementById('ww-warning-detail');
-            const arrow = this.querySelector('.ww-row-arrow');
-            const isOpen = detail.style.display === 'block';
-            detail.style.display = isOpen ? 'none' : 'block';
-            arrow.classList.toggle('open', !isOpen);
-        });
-        document.getElementById('ww-typhoon-row').addEventListener('click', function() {
-            const detail = document.getElementById('ww-typhoon-detail');
-            const arrow = this.querySelector('.ww-row-arrow');
-            const isOpen = detail.style.display === 'block';
-            detail.style.display = isOpen ? 'none' : 'block';
-            arrow.classList.toggle('open', !isOpen);
+        // [수정] 특보발효중/태풍정보 행 클릭 시 각 상세페이지로 이동 (펼치기 아님)
+        // 👉 나중에 실제 상세페이지 파일을 만드시면, HTML의 data-href 값만 그 파일명으로 바꾸면 돼요.
+        document.querySelectorAll('#weather-warning-list .ww-row').forEach(row => {
+            row.addEventListener('click', function() {
+                const href = this.dataset.href;
+                if (href) window.location.href = href;
+            });
         });
 
         function getStationCode(lat, lng) {
