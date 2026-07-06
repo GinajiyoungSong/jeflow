@@ -354,6 +354,23 @@
             color: #1e293b;
         }
 
+        .popup-signal-hero {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 10px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-weight: 900;
+            font-size: 15px;
+            border-width: 2px;
+            border-style: solid;
+        }
+        .popup-signal-hero .hero-icon { font-size: 24px; line-height: 1; }
+        .popup-signal-hero.signal-ok { background:#d1fae5; color:#065f46; border-color:#22c55e; }
+        .popup-signal-hero.signal-caution { background:#fef3c7; color:#92400e; border-color:#facc15; }
+        .popup-signal-hero.signal-danger { background:#fee2e2; color:#991b1b; border-color:#ef4444; }
         .popup-header {
             display: flex;
             align-items: center;
@@ -485,11 +502,11 @@
         /* 모바일 스크린 폰트/여백 최적화 반응형 디자인 */
         @media (max-width: 600px) {
             #map-wrapper {
-                height: 42vh !important;
-                min-height: 260px !important;
+                height: 58vh !important;
+                min-height: 340px !important;
             }
             #ocean-panel {
-                max-height: 45vh !important;
+                max-height: none !important;
                 padding: 12px 14px !important;
             }
 
@@ -802,8 +819,6 @@
         <!-- 마커 선택 후 실제 정보가 표시되는 영역 -->
         <div id="panel-content" style="display:none;">
             <span class="panel-close" onclick="resetOceanPanel()">×</span>
-
-            <div class="panel-subtitle" id="p-name-mini" style="margin-bottom:10px;">📍 -</div>
 
             <div class="info-card-section" style="border-top:none; padding-top:0;">
                 <div class="section-header">☀️ 실시간 바다 기상 및 파랑 정보</div>
@@ -1376,6 +1391,23 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
         }
 
         /* ================================================================
+         * ⚡ [신규] 간단한 메모리 캐시 - 로딩 속도 개선용
+         * 제주 전역이라도 물때/단기예보는 관측소·격자 단위로는 몇 개 안 되게 겹치기 때문에
+         * (조위관측소 3곳, 격자칸도 인근 마커끼리 자주 겹침), 같은 키로 5분 안에 다시
+         * 요청이 오면 네트워크 호출 없이 바로 이전 값을 재사용합니다.
+         * ================================================================ */
+        const API_CACHE = {};
+        const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+        function getCached(key) {
+            const hit = API_CACHE[key];
+            if (hit && (Date.now() - hit.time) < CACHE_TTL_MS) return hit.data;
+            return undefined;
+        }
+        function setCached(key, data) {
+            API_CACHE[key] = { data, time: Date.now() };
+        }
+
+        /* ================================================================
          * 📹🎬 [신규] 팝업 내 CCTV/드론영상 매칭 - "무료 스팟소개" 콘텐츠
          * 지점명으로 월파감시 CCTV, 공공저작물 드론영상을 검색해서 팝업 안에 표시합니다.
          * 나중에 유료 멤버십(시크릿 스팟)을 붙일 때는 이 아래에 카드 하나만 더 추가하면 됩니다.
@@ -1560,13 +1592,19 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
             try {
                 const { nx, ny } = latLngToGrid(lat, lng);
                 const { base_date, base_time } = getVilageBaseDateTime();
+
+                // [신규] 격자(nx,ny)+발표시각 단위로 캐시 - 근처 마커끼리 같은 격자를 공유하는 경우가 많음
+                const cacheKey = `vilage:${nx}:${ny}:${base_date}:${base_time}`;
+                const cached = getCached(cacheKey);
+                if (cached !== undefined) return cached;
+
                 const url = `${appsScriptProxyUrl}?action=vilage&nx=${nx}&ny=${ny}&base_date=${base_date}&base_time=${base_time}`;
                 const res = await fetchWithTimeout(url, 6000);
-                if (!res.ok) return { wsd: null, wav: null };
+                if (!res.ok) { const empty = { wsd: null, wav: null }; setCached(cacheKey, empty); return empty; }
                 const json = await res.json();
                 console.log('[기상청 단기예보 원본 응답]', json);
                 const items = json?.response?.body?.items?.item;
-                if (!items || !Array.isArray(items) || items.length === 0) return { wsd: null, wav: null };
+                if (!items || !Array.isArray(items) || items.length === 0) { const empty = { wsd: null, wav: null }; setCached(cacheKey, empty); return empty; }
 
                 const firstFcstTime = items[0].fcstTime; // 가장 이른(=현재와 가장 가까운) 예보시각 기준
                 let wsd = null, wav = null;
@@ -1575,10 +1613,12 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                     if (it.category === 'WSD') wsd = parseFloat(it.fcstValue);
                     if (it.category === 'WAV') wav = parseFloat(it.fcstValue);
                 });
-                return {
+                const result = {
                     wsd: (wsd === null || isNaN(wsd)) ? null : wsd,
                     wav: (wav === null || isNaN(wav)) ? null : wav
                 };
+                setCached(cacheKey, result);
+                return result;
             } catch (err) {
                 console.warn('기상청 단기예보 조회 실패, Open-Meteo 값으로 폴백:', err);
                 return { wsd: null, wav: null };
@@ -1589,15 +1629,22 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
         // 이 API엔 파고가 없어서 바람(풍속)에만 적용됨. 실패/값없음이면 { wspd:null } 반환 → 단기예보/Open-Meteo로 폴백
         async function fetchKhoaRecentWind(stationCode, reqDate, appsScriptProxyUrl) {
             try {
+                // [신규] 관측소는 제주 전체에서 3곳(제주/서귀포/성산포)뿐이라 캐시 효과가 특히 큼
+                const cacheKey = `khoa:${stationCode}:${reqDate}`;
+                const cached = getCached(cacheKey);
+                if (cached !== undefined) return cached;
+
                 const url = `${appsScriptProxyUrl}?action=tiderecent&obsCode=${stationCode}&reqDate=${reqDate}&min=60`;
                 const res = await fetchWithTimeout(url, 6000);
-                if (!res.ok) return { wspd: null };
+                if (!res.ok) { const empty = { wspd: null }; setCached(cacheKey, empty); return empty; }
                 const json = await res.json();
                 const items = json?.response?.body?.items?.item;
-                if (!items) return { wspd: null };
+                if (!items) { const empty = { wspd: null }; setCached(cacheKey, empty); return empty; }
                 const first = Array.isArray(items) ? items[0] : items;
                 const wspd = parseFloat(first?.wspd);
-                return { wspd: isNaN(wspd) ? null : wspd };
+                const result = { wspd: isNaN(wspd) ? null : wspd };
+                setCached(cacheKey, result);
+                return result;
             } catch (err) {
                 console.warn('KHOA 실측 조회 실패, 단기예보/Open-Meteo로 폴백:', err);
                 return { wspd: null };
@@ -1617,7 +1664,6 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
             document.getElementById('panel-placeholder').style.display = 'none';
             const panelContentEl = document.getElementById('panel-content');
             panelContentEl.style.display = 'block';
-            document.getElementById('p-name-mini').innerText = `📍 ${name} - 로딩 중...`;
 
             let windSpeed = 3.0; 
             let waveHeight = 0.5; 
@@ -1807,8 +1853,12 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                 `;
             }
 
-            // [수정] 팝업(지도 위 말풍선)에 이름+신호등+설명+가이드라인을 다시 조립
+            // [수정] 신호등을 이름 위에 크게 배치 - 직관적으로 먼저 눈에 들어오도록 구성
             let popupContent = `
+                <div class="popup-signal-hero ${signalClass}">
+                    <span class="hero-icon">${signalIcon}</span>
+                    <span>${signalLabel}</span>
+                </div>
                 <div class="popup-header">
                     <span class="popup-title">${name}</span>
                     <span class="popup-status-group">
@@ -1817,7 +1867,6 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                             <span class="tl-dot tl-yellow ${signalClass === 'signal-caution' ? 'on' : ''}"></span>
                             <span class="tl-dot tl-green ${signalClass === 'signal-ok' ? 'on' : ''}"></span>
                         </span>
-                        <span class="popup-signal-badge ${signalClass}">${signalIcon} ${signalLabel}</span>
                     </span>
                 </div>
                 <div class="popup-desc">${desc || "맑고 아름다운 제주 해안가 명소입니다."}</div>
@@ -1842,23 +1891,28 @@ const bottomleft = L.latLng(${calBottomleft.lat.toFixed(5)}, ${calBottomleft.lng
                     ${swellBannerHtml}
                 `;
             }
-            // [신규] CCTV/드론영상 - 미리 조회해둔 결과(mediaPromise)를 확인해서, 매칭되는 것만 버튼으로 노출
-            const [cctvItems, droneItems] = await mediaPromise;
-            const cctvItem = cctvItems[0] || null;
-            const droneItem = droneItems[0] || null;
-            window.__popupMediaCache = { cctv: cctvItem, drone: droneItem }; // 클릭 시 재조회 없이 바로 렌더링용 캐시
-
-            if (cctvItem || droneItem) {
-                popupContent += `<div class="popup-media-row">`;
-                if (cctvItem) popupContent += `<button class="popup-media-btn" onclick="showCachedMedia('cctv')">📹 실시간 CCTV</button>`;
-                if (droneItem) popupContent += `<button class="popup-media-btn" onclick="showCachedMedia('drone')">🎬 드론·경관 영상</button>`;
-                popupContent += `</div><div id="popup-media-slot"></div>`;
-            }
+            // [수정] CCTV/드론영상은 팝업 본문(바람·파도·물때 등 핵심 정보)이 먼저 뜨도록
+            // 여기서 기다리지 않고, 팝업을 먼저 띄운 뒤 도착하는 대로 버튼만 추가로 붙입니다.
+            // (예전엔 이 조회까지 다 끝나야 팝업 전체가 떴었는데, CCTV/드론영상이 느리면
+            //  핵심 정보까지 같이 늦게 뜨는 문제가 있었음)
             marker.setPopupContent(popupContent);
 
-            // [수정] 하단 패널은 위치 미니 라벨만 갱신 (상세 설명은 팝업이 담당)
-            document.getElementById('p-name-mini').innerText = `📍 ${name}`;
+            mediaPromise.then(([cctvItems, droneItems]) => {
+                const cctvItem = cctvItems[0] || null;
+                const droneItem = droneItems[0] || null;
+                window.__popupMediaCache = { cctv: cctvItem, drone: droneItem }; // 클릭 시 재조회 없이 바로 렌더링용 캐시
 
+                if (cctvItem || droneItem) {
+                    let mediaHtml = `<div class="popup-media-row">`;
+                    if (cctvItem) mediaHtml += `<button class="popup-media-btn" onclick="showCachedMedia('cctv')">📹 실시간 CCTV</button>`;
+                    if (droneItem) mediaHtml += `<button class="popup-media-btn" onclick="showCachedMedia('drone')">🎬 드론·경관 영상</button>`;
+                    mediaHtml += `</div><div id="popup-media-slot"></div>`;
+                    // 이미 열려 있는 팝업 내용 뒤에 이어붙임 (팝업이 닫혔어도 다음에 열 때 반영됨)
+                    marker.setPopupContent(popupContent + mediaHtml);
+                }
+            }).catch(err => console.warn('CCTV/드론영상 후속 렌더링 실패:', err));
+
+            // [수정] 스팟 이름은 팝업에서만 표시 (패널 내 중복 표시 제거)
             document.getElementById('w-wind').innerText = isRestrictedZone ? '-' : `${windSpeed} m/s`;
             document.getElementById('w-wave').innerText = isRestrictedZone ? '-' : `${waveHeight} m`;
             document.getElementById('w-period').innerText = isRestrictedZone ? '-' : `${wavePeriod} s`;
