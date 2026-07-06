@@ -907,10 +907,6 @@
             // [수정] 그림 파일이 jejuisland.jpeg -> jejuisland.png로 교체되면서 이미지 비율(가로세로)이
             // 달라져 기존 보정값이 안 맞게 됨. 제주도 실제 경계 기준 중립값으로 리셋 -> 아래 ?calibrate=1
             // 모드로 새 그림에 맞게 다시 미세조정 필요.
-            const ORIG_CORNERS = {
-                topleft:    L.latLng(33.58800, 126.03800),
-                topright:   L.latLng(33.70039, 127.00933),
-                bottomleft: L.latLng(33.09211, 126.09538)
             };
             let calTopleft = L.latLng(ORIG_CORNERS.topleft.lat, ORIG_CORNERS.topleft.lng);
             let calTopright = L.latLng(ORIG_CORNERS.topright.lat, ORIG_CORNERS.topright.lng);
